@@ -295,11 +295,11 @@ struct RecordingHUDView: View {
         .frame(width: 116, height: 36)
         .background(
             Capsule()
-                .fill(DesignTokens.black.opacity(0.92))
+                .fill(.ultraThinMaterial)
         )
         .overlay(
             Capsule()
-                .stroke(DesignTokens.borderPrimary, lineWidth: 1)
+                .stroke(DesignTokens.borderPrimary.opacity(0.6), lineWidth: 1)
         )
         .clipShape(Capsule())
         .shadow(color: Color.black.opacity(0.4), radius: 8, x: 0, y: 3)
@@ -353,11 +353,11 @@ struct RecordingHUDView: View {
         .frame(width: 340)
         .background(
             RoundedRectangle(cornerRadius: DesignTokens.radiusXl)
-                .fill(DesignTokens.black.opacity(0.95))
+                .fill(.ultraThinMaterial)
         )
         .overlay(
             RoundedRectangle(cornerRadius: DesignTokens.radiusXl)
-                .stroke(DesignTokens.borderPrimary, lineWidth: 1)
+                .stroke(DesignTokens.borderPrimary.opacity(0.6), lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: DesignTokens.radiusXl))
         .shadow(color: .black.opacity(0.4), radius: 14, y: 6)

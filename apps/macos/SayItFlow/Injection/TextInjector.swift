@@ -38,7 +38,9 @@ struct TextInjector {
             category: "injection"
         )
 
-        ensureAppActive(pid: options.pinnedPID)
+        // Make sure the target application is frontmost and active
+        activatePinnedApp(pid: options.pinnedPID)
+        usleep(50_000) // 50ms settling window for WindowServer app focus
 
         if options.preferPaste {
             if insertViaPaste(text, targetPID: options.pinnedPID) {
@@ -52,12 +54,17 @@ struct TextInjector {
             return
         }
 
-        ensureAppActive(pid: options.pinnedPID)
+        // Accessibility failed or not supported in this app — try Cmd+V paste
+        activatePinnedApp(pid: options.pinnedPID)
+        usleep(40_000)
         if insertViaPaste(text, targetPID: options.pinnedPID) {
             SessionTrace.log("Injected via paste fallback successfully", category: "injection")
             return
         }
 
+        // Paste fallback failed — try simulated typing
+        activatePinnedApp(pid: options.pinnedPID)
+        usleep(30_000)
         if KeystrokeEmitter.typeText(text, targetPID: options.pinnedPID) {
             SessionTrace.log("Injected via KeystrokeEmitter typing successfully", category: "injection")
             return
@@ -68,18 +75,12 @@ struct TextInjector {
         throw TextInjectionError.insertionFailed
     }
 
-    private func ensureAppActive(pid: pid_t?) {
+    private func activatePinnedApp(pid: pid_t?) {
         guard let pid else { return }
+        let ownPID = ProcessInfo.processInfo.processIdentifier
+        guard pid != ownPID else { return }
         let app = NSRunningApplication(processIdentifier: pid)
-        guard let app else { return }
-        if !app.isActive {
-            app.activate(options: [.activateIgnoringOtherApps])
-            let deadline = CFAbsoluteTimeGetCurrent() + 0.15
-            while !app.isActive && CFAbsoluteTimeGetCurrent() < deadline {
-                usleep(10_000)
-            }
-            usleep(25_000)
-        }
+        app?.activate(options: [.activateIgnoringOtherApps])
     }
 
     private func insertViaAccessibility(_ text: String, targetPID: pid_t?) -> Bool {

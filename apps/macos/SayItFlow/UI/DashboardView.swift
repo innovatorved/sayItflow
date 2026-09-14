@@ -303,15 +303,6 @@ struct DashboardView: View {
             }
             .monochromeCard(radius: DesignTokens.radiusMd, padding: 12)
         }
-        .onReceive(appState.$partialTranscript) { text in
-            if !text.isEmpty {
-                if demoText.isEmpty {
-                    demoText = text
-                } else {
-                    demoText += " " + text
-                }
-            }
-        }
     }
 
     // MARK: - Dictation Settings

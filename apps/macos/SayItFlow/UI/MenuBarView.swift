@@ -10,7 +10,7 @@ struct MenuBarView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            Divider().overlay(DesignTokens.borderPrimary)
+            Divider().overlay(DesignTokens.borderSubtle.opacity(0.5))
 
             VStack(alignment: .leading, spacing: 4) {
                 if appState.permissionsNeedAttention {
@@ -48,11 +48,11 @@ struct MenuBarView: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 8)
 
-            Divider().overlay(DesignTokens.borderPrimary)
+            Divider().overlay(DesignTokens.borderSubtle.opacity(0.5))
             footer
         }
         .frame(width: 300)
-        .background(DesignTokens.surface)
+        .background(.ultraThinMaterial)
     }
 
     // MARK: - Header
@@ -168,7 +168,7 @@ struct MenuBarView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
-        .background(DesignTokens.surfaceSubtle)
+        .background(Color.primary.opacity(0.03))
     }
 
     private var footerText: String {

@@ -50,8 +50,10 @@ enum AXHelpers {
             kAXComboBoxRole as String,
             "AXTextArea",
             "AXTextField",
+            "AXWebArea",
             "AXEditableText",
             "AXSearchField",
+            "AXStaticText",
         ]
         if textRoles.contains(role) { return true }
 
@@ -67,7 +69,7 @@ enum AXHelpers {
     }
 }
 
-/// Resolves the focused text field — fast, non-blocking check without traversing window hierarchies.
+/// Resolves the focused text field — supports native Cocoa, WebKit, and Electron.
 enum AXFocusResolver {
     struct Diagnostics: Sendable {
         var frontBundle: String?
@@ -86,6 +88,12 @@ enum AXFocusResolver {
                 if AXHelpers.isTextInputElement(element) || canInsertText(into: element) {
                     return element
                 }
+            }
+
+            if let window = focusedWindow(in: appElement),
+               let element = findEditableElement(in: window, depth: 0) {
+                diagnostics.searchRole = AXHelpers.role(of: element)
+                return element
             }
         }
 
@@ -114,6 +122,16 @@ enum AXFocusResolver {
         return AXHelpers.uiElement(from: focusedRef)
     }
 
+    private static func focusedWindow(in app: AXUIElement) -> AXUIElement? {
+        var windowRef: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(
+            app,
+            kAXFocusedWindowAttribute as CFString,
+            &windowRef
+        ) == .success, let windowRef else { return nil }
+        return AXHelpers.uiElement(from: windowRef)
+    }
+
     private static func canInsertText(into element: AXUIElement) -> Bool {
         if AXHelpers.isTextInputElement(element) { return true }
         var settable = DarwinBoolean(false)
@@ -132,5 +150,34 @@ enum AXFocusResolver {
             return true
         }
         return false
+    }
+
+    private static func findEditableElement(in root: AXUIElement, depth: Int) -> AXUIElement? {
+        guard depth < 8 else { return nil }
+
+        if let focused = copyFocused(from: root), canInsertText(into: focused) {
+            return focused
+        }
+        if canInsertText(into: root) {
+            return root
+        }
+
+        var childrenRef: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(
+            root,
+            kAXChildrenAttribute as CFString,
+            &childrenRef
+        ) == .success, let children = childrenRef as? [AnyObject] else {
+            return nil
+        }
+
+        for child in children {
+            guard let childRef = child as CFTypeRef?,
+                  let element = AXHelpers.uiElement(from: childRef) else { continue }
+            if let match = findEditableElement(in: element, depth: depth + 1) {
+                return match
+            }
+        }
+        return nil
     }
 }

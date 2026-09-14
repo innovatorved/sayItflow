@@ -10,7 +10,7 @@ enum KeystrokeEmitter {
     nonisolated static let simulatedEventTag: Int64 = 998_877
 
     private static let interKeyDelay: useconds_t = 1_000
-    private static let eventPostLocation: CGEventTapLocation = .cghidEventTap
+    private static let eventPostLocation: CGEventTapLocation = .cgSessionEventTap
 
     /// Apps where Shift+Option+Left word boundaries differ from standard text fields.
     static let wordSelectDenylist: Set<String> = [
@@ -65,12 +65,8 @@ enum KeystrokeEmitter {
             keyUp.keyboardSetUnicodeString(stringLength: chars.count, unicodeString: &chars)
             tag(keyDown)
             tag(keyUp)
-            // Post to the global event stream only — ensureAppActive guarantees
-            // the correct app is frontmost, so postToPid is unnecessary and
-            // would cause duplicate keystrokes.
-            keyDown.post(tap: .cghidEventTap)
-            usleep(2_000)
-            keyUp.post(tap: .cghidEventTap)
+            keyDown.post(tap: eventPostLocation)
+            keyUp.post(tap: eventPostLocation)
             usleep(interKeyDelay)
         }
         return true
@@ -148,7 +144,7 @@ enum KeystrokeEmitter {
 
     @discardableResult
     static func postCommandV(targetPID: pid_t? = nil) -> Bool {
-        guard let source = CGEventSource(stateID: .hidSystemState) else { return false }
+        guard let source = CGEventSource(stateID: .combinedSessionState) else { return false }
         guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_ANSI_V), keyDown: true),
               let keyUp = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_ANSI_V), keyDown: false) else {
             return false
@@ -158,9 +154,8 @@ enum KeystrokeEmitter {
         tag(keyDown)
         tag(keyUp)
 
-        keyDown.post(tap: .cghidEventTap)
-        usleep(15_000)
-        keyUp.post(tap: .cghidEventTap)
+        keyDown.post(tap: eventPostLocation)
+        keyUp.post(tap: eventPostLocation)
         return true
     }
 
@@ -179,9 +174,8 @@ enum KeystrokeEmitter {
         tag(keyDown)
         tag(keyUp)
 
-        keyDown.post(tap: .cghidEventTap)
-        usleep(2_000)
-        keyUp.post(tap: .cghidEventTap)
+        keyDown.post(tap: eventPostLocation)
+        keyUp.post(tap: eventPostLocation)
         usleep(interKeyDelay)
         return true
     }

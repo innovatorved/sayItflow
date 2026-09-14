@@ -4,8 +4,8 @@ import Foundation
 /// Saves and restores the full pasteboard around synthetic Cmd+V.
 enum PasteboardRescue {
     /// Grace period for the target app to read the pasteboard before we put the
-    /// user's own clipboard back. Increased to 1.20s for Electron/browser event queues.
-    static let restoreDelay: TimeInterval = 1.20
+    /// user's own clipboard back.
+    static let restoreDelay: TimeInterval = 0.50
 
     /// Deep-copies every item and type currently on the pasteboard.
     static func snapshot(_ pasteboard: NSPasteboard = .general) -> [NSPasteboardItem] {

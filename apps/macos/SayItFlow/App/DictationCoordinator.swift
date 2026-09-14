@@ -204,7 +204,7 @@ final class DictationCoordinator {
                     // started dictation from SayItFlow itself (its own window).
                     // When pinnedApp is an external app, always inject there.
                     let ownPID = ProcessInfo.processInfo.processIdentifier
-                    let isOwnApp = (pinnedApp == nil || pinnedApp == ownPID)
+                    let isOwnApp = (pinnedApp != nil && pinnedApp == ownPID)
                     if isOwnApp, let onboardingHandler = self.onboardingInjectionHandler {
                         onboardingHandler(transcript)
                     } else {
