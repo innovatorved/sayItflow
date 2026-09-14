@@ -200,8 +200,12 @@ final class DictationCoordinator {
                         engine: engineName,
                         outcome: "done"
                     )
-
-                    if let onboardingHandler = self.onboardingInjectionHandler {
+                    // Only route to onboarding/demo handler if the user
+                    // started dictation from SayItFlow itself (its own window).
+                    // When pinnedApp is an external app, always inject there.
+                    let ownPID = ProcessInfo.processInfo.processIdentifier
+                    let isOwnApp = (pinnedApp == nil || pinnedApp == ownPID)
+                    if isOwnApp, let onboardingHandler = self.onboardingInjectionHandler {
                         onboardingHandler(transcript)
                     } else {
                         var options = TextInjectionOptions()

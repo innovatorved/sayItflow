@@ -65,11 +65,9 @@ enum KeystrokeEmitter {
             keyUp.keyboardSetUnicodeString(stringLength: chars.count, unicodeString: &chars)
             tag(keyDown)
             tag(keyUp)
-            if let targetPID {
-                keyDown.postToPid(targetPID)
-                usleep(2_000)
-                keyUp.postToPid(targetPID)
-            }
+            // Post to the global event stream only — ensureAppActive guarantees
+            // the correct app is frontmost, so postToPid is unnecessary and
+            // would cause duplicate keystrokes.
             keyDown.post(tap: .cghidEventTap)
             usleep(2_000)
             keyUp.post(tap: .cghidEventTap)
@@ -160,12 +158,6 @@ enum KeystrokeEmitter {
         tag(keyDown)
         tag(keyUp)
 
-        if let targetPID {
-            keyDown.postToPid(targetPID)
-            usleep(15_000)
-            keyUp.postToPid(targetPID)
-        }
-
         keyDown.post(tap: .cghidEventTap)
         usleep(15_000)
         keyUp.post(tap: .cghidEventTap)
@@ -186,12 +178,6 @@ enum KeystrokeEmitter {
         keyUp.flags = flags
         tag(keyDown)
         tag(keyUp)
-
-        if let targetPID {
-            keyDown.postToPid(targetPID)
-            usleep(2_000)
-            keyUp.postToPid(targetPID)
-        }
 
         keyDown.post(tap: .cghidEventTap)
         usleep(2_000)

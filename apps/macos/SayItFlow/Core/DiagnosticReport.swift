@@ -49,7 +49,7 @@ enum DiagnosticReport {
         sections.append("""
         ## Engine & Models
         - Engine Ready: \(appState.engineReady)
-        - Speech STT Model: \(engineSettings.sttModelName)
+        - Speech STT Model: \(engineSettings.sttModelName) (\(engineSettings.sttModelArchitecture))
         - Voz Downloaded: \(VozEngine.shared.isDownloaded)
         - Voz Ready on Neural Engine: \(VozEngine.shared.isReady)
         - Spoken Language: \(engineSettings.selectedLanguage)

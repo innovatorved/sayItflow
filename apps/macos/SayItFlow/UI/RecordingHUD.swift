@@ -103,7 +103,9 @@ final class RecordingHUDController: NSObject {
     }
 
     func updateAudioLevel(_ level: Float) {
-        audioLevel = min(max(level, 0), 1)
+        let clamped = min(max(level, 0), 1)
+        // Low-pass exponential smoothing to prevent vibration from mic noise
+        audioLevel = audioLevel * 0.7 + clamped * 0.3
         let now = CFAbsoluteTimeGetCurrent()
         guard now - lastAudioViewUpdate >= 0.1 else { return }
         lastAudioViewUpdate = now
@@ -379,8 +381,8 @@ struct RecordingHUDView: View {
                 LogoMark(size: .md, tint: markColor)
             }
         }
-        .scaleEffect(state == .listening ? 1.0 + CGFloat(audioLevel) * 0.1 : 1.0)
-        .animation(DesignTokens.easeOut, value: audioLevel)
+        .scaleEffect(state == .listening ? 1.05 : 1.0)
+        .animation(DesignTokens.easeOut, value: state)
     }
 
     private var markColor: Color {
@@ -437,17 +439,19 @@ struct WaveformGauge: View {
                 Capsule()
                     .fill(color)
                     .frame(width: 3, height: barHeight(index))
-                    .animation(DesignTokens.reduceMotion ? nil : DesignTokens.easeOut, value: level)
             }
         }
         .padding(.horizontal, 10)
+        .animation(DesignTokens.reduceMotion ? nil : .linear(duration: 0.08), value: level)
     }
 
     private func barHeight(_ index: Int) -> CGFloat {
+        // Noise gate: treat ambient mic hiss as silence
+        let gated = level < 0.05 ? 0.0 : Double(level)
         let centerDistance = abs(Double(index) - Double(barCount - 1) / 2)
             / (Double(barCount - 1) / 2)   // 0 center … 1 edge
         let silhouette = 1.0 - centerDistance * 0.55
-        let shaped = min(max(Double(level), 0.08), 1) * 0.75 + 0.25
+        let shaped = gated * 0.75 + 0.25
         return max(4, 24 * silhouette * shaped)
     }
 }

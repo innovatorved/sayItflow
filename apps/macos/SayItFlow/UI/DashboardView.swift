@@ -194,17 +194,21 @@ struct DashboardView: View {
 
                 // Row 1: Voz STT
                 HStack(alignment: .center, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: 3) {
                         HStack(spacing: 6) {
                             Text(engineSettings.sttModelName)
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(.system(size: 12, weight: .semibold))
                                 .foregroundStyle(DesignTokens.textPrimary)
-                            Text("Stage 1: Speech-to-Text")
-                                .font(DesignTokens.fontMono(size: 10))
+                                .lineLimit(1)
+                            Text("STT")
+                                .font(DesignTokens.fontMono(size: 9, weight: .medium))
                                 .foregroundStyle(DesignTokens.textMuted)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 1)
+                                .background(DesignTokens.borderSubtle.opacity(0.5), in: RoundedRectangle(cornerRadius: 3))
                         }
-                        Text("467 MB · Apple Neural Engine · 25 Languages · ~290x real-time")
-                            .font(.system(size: 11))
+                        Text("Parakeet 0.6B · 467 MB · Neural Engine · 25 Langs")
+                            .font(.system(size: 10))
                             .foregroundStyle(DesignTokens.textSecondary)
                     }
                     Spacer()
@@ -225,17 +229,21 @@ struct DashboardView: View {
 
                 // Row 2: S1-mini Normalizer
                 HStack(alignment: .center, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: 3) {
                         HStack(spacing: 6) {
-                            Text("S1-mini by Superwhisper")
-                                .font(.system(size: 13, weight: .semibold))
+                            Text("S1-mini")
+                                .font(.system(size: 12, weight: .semibold))
                                 .foregroundStyle(DesignTokens.textPrimary)
-                            Text("Stage 2: Normalizer")
-                                .font(DesignTokens.fontMono(size: 10))
+                                .lineLimit(1)
+                            Text("Normalizer")
+                                .font(DesignTokens.fontMono(size: 9, weight: .medium))
                                 .foregroundStyle(DesignTokens.textMuted)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 1)
+                                .background(DesignTokens.borderSubtle.opacity(0.5), in: RoundedRectangle(cornerRadius: 3))
                         }
-                        Text("462 MB · Qwen3-0.6B Q4_K_M · Metal GPU · Speech polish & numbers")
-                            .font(.system(size: 11))
+                        Text("Superwhisper · Qwen3 0.6B · 462 MB · Metal GPU")
+                            .font(.system(size: 10))
                             .foregroundStyle(DesignTokens.textSecondary)
                     }
                     Spacer()
