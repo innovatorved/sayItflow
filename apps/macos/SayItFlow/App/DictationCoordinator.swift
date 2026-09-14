@@ -210,6 +210,9 @@ final class DictationCoordinator {
                     } else {
                         var options = TextInjectionOptions()
                         options.pinnedPID = pinnedApp
+                        let targetBundle = (pinnedApp != nil ? NSRunningApplication(processIdentifier: pinnedApp!)?.bundleIdentifier : nil)
+                            ?? NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+                        options.preferPaste = InjectionTargetPolicy.prefersPaste(bundleID: targetBundle)
                         do {
                             try TextInjector().inject(transcript, options: options)
                         } catch {

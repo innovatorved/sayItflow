@@ -155,6 +155,7 @@ enum KeystrokeEmitter {
         tag(keyUp)
 
         keyDown.post(tap: eventPostLocation)
+        usleep(20_000) // 20ms dwell time for target app to register key down with Command flag
         keyUp.post(tap: eventPostLocation)
         return true
     }
@@ -175,6 +176,7 @@ enum KeystrokeEmitter {
         tag(keyUp)
 
         keyDown.post(tap: eventPostLocation)
+        usleep(5_000) // 5ms dwell time
         keyUp.post(tap: eventPostLocation)
         usleep(interKeyDelay)
         return true

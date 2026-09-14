@@ -14,3 +14,36 @@ enum LiveInjectionPolicy {
         return !blockedBundleIDs.contains(bundleID)
     }
 }
+
+/// Determines the optimal injection strategy for target applications.
+/// Electron apps, web browsers, and terminals require Paste (⌘V) because AX selected-text
+/// either fails, silently no-ops, or corrupts DOM state.
+enum InjectionTargetPolicy {
+    static func prefersPaste(bundleID: String?) -> Bool {
+        guard let bundle = bundleID?.lowercased() else { return true }
+        let pasteBundles: Set<String> = [
+            "com.google.chrome",
+            "com.google.chrome.canary",
+            "com.brave.browser",
+            "com.microsoft.edgemac",
+            "company.thebrowser.browser",
+            "com.operasoftware.opera",
+            "org.mozilla.firefox",
+            "net.whatsapp.whatsapp",
+            "com.tinyspeck.slackmacgap",
+            "com.hnc.discord",
+            "com.microsoft.vscode",
+            "md.obsidian",
+            "notion.id",
+            "com.apple.terminal",
+            "com.googlecode.iterm2",
+            "dev.warp.warp-stable",
+            "com.apple.safari"
+        ]
+        if pasteBundles.contains(bundle) { return true }
+        if bundle.contains("electron") || bundle.contains("todesktop") || bundle.contains("chromium") {
+            return true
+        }
+        return false
+    }
+}

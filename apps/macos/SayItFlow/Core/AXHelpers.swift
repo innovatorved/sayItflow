@@ -50,10 +50,8 @@ enum AXHelpers {
             kAXComboBoxRole as String,
             "AXTextArea",
             "AXTextField",
-            "AXWebArea",
             "AXEditableText",
             "AXSearchField",
-            "AXStaticText",
         ]
         if textRoles.contains(role) { return true }
 

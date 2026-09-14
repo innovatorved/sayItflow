@@ -294,7 +294,7 @@ public final class S1MiniEngine: ObservableObject {
         guard let url = URL(string: "http://127.0.0.1:8080/completion") else { return nil }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.timeoutInterval = 0.35
+        request.timeoutInterval = 0.05
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
 
         let body: [String: Any] = [

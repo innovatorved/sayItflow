@@ -792,7 +792,12 @@ struct DashboardView: View {
         appState.setOnboardingLiveHandlers(
             prefix: { demoText },
             update: { demoText = $0 },
-            onComplete: { _ in
+            onComplete: { text in
+                if demoText.isEmpty {
+                    demoText = text
+                } else {
+                    demoText += " " + text
+                }
                 hint = "Inserted!"
             }
         )
