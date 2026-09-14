@@ -76,6 +76,8 @@ public final class S1MiniEngine: ObservableObject {
     private static let downloadURLString = "https://huggingface.co/superwhisper/s1-mini-GGUF/resolve/main/s1-mini-q4_k_m.gguf"
     private static let modelFileName = "s1-mini-q4_k_m.gguf"
 
+    public static let serverPort: Int = 58231
+
     // MARK: - Published State
 
     @Published public private(set) var isDownloaded: Bool = false
@@ -83,9 +85,22 @@ public final class S1MiniEngine: ObservableObject {
     @Published public private(set) var downloadProgress: Double = 0.0
     @Published public private(set) var lastError: String?
     @Published public private(set) var lastLatencyMs: Double = 0.0
+    @Published public private(set) var isServerRunning: Bool = false
+
+    private var serverProcess: Process?
+    private var isStartingServer: Bool = false
 
     @Published public var isEnabled: Bool {
-        didSet { UserDefaults.standard.set(isEnabled, forKey: Keys.isEnabled) }
+        didSet {
+            UserDefaults.standard.set(isEnabled, forKey: Keys.isEnabled)
+            if isEnabled {
+                Task { [weak self] in
+                    _ = await self?.ensureServerRunning()
+                }
+            } else {
+                stopServer()
+            }
+        }
     }
 
     @Published public var styling: S1Styling {
@@ -148,6 +163,24 @@ public final class S1MiniEngine: ObservableObject {
         }
 
         refreshStatus()
+        setupLifecycleObservers()
+        if isDownloaded && isEnabled {
+            Task { [weak self] in
+                _ = await self?.ensureServerRunning()
+            }
+        }
+    }
+
+    private func setupLifecycleObservers() {
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.willTerminateNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.stopServer()
+            }
+        }
     }
 
     // MARK: - Status & Model Management
@@ -204,6 +237,11 @@ public final class S1MiniEngine: ObservableObject {
             isDownloaded = true
             isDownloading = false
             downloadProgress = 1.0
+            if isEnabled {
+                Task { [weak self] in
+                    _ = await self?.ensureServerRunning()
+                }
+            }
         } catch {
             isDownloading = false
             downloadProgress = 0.0
@@ -214,11 +252,164 @@ public final class S1MiniEngine: ObservableObject {
 
     /// Deletes the downloaded model file.
     public func deleteModel() throws {
+        stopServer()
         let url = modelFileURL
         if FileManager.default.fileExists(atPath: url.path) {
             try FileManager.default.removeItem(at: url)
         }
         refreshStatus()
+    }
+
+    // MARK: - Server Process Management
+
+    /// Locates the `llama-server` executable on macOS.
+    public func findServerBinary() -> String? {
+        var candidates: [String] = []
+        if let resPath = Bundle.main.path(forResource: "llama-server", ofType: nil) {
+            candidates.append(resPath)
+        }
+        let helpersPath = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/llama-server").path
+        candidates.append(helpersPath)
+
+        let home = NSHomeDirectory()
+        candidates.append(contentsOf: [
+            "/opt/homebrew/bin/llama-server",
+            "/usr/local/bin/llama-server",
+            "\(home)/.homebrew/bin/llama-server",
+            "\(home)/.local/bin/llama-server",
+            "\(home)/homebrew/bin/llama-server",
+            "/opt/homebrew/opt/llama.cpp/bin/llama-server"
+        ])
+
+        for path in candidates {
+            if FileManager.default.isExecutableFile(atPath: path) {
+                return path
+            }
+        }
+
+        if let pathEnv = ProcessInfo.processInfo.environment["PATH"] {
+            for dir in pathEnv.components(separatedBy: ":") {
+                let p = URL(fileURLWithPath: dir).appendingPathComponent("llama-server").path
+                if FileManager.default.isExecutableFile(atPath: p) {
+                    return p
+                }
+            }
+        }
+
+        return nil
+    }
+
+    /// Checks if the local llama-server instance is healthy and responding.
+    public func checkHealth() async -> Bool {
+        guard let url = URL(string: "http://127.0.0.1:\(Self.serverPort)/health") else { return false }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 0.4
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return false }
+            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let status = json["status"] as? String, status == "ok" {
+                return true
+            }
+        } catch {
+            return false
+        }
+        return false
+    }
+
+    /// Ensures the background llama-server process is active and ready to serve requests.
+    @discardableResult
+    public func ensureServerRunning() async -> Bool {
+        if await checkHealth() {
+            isServerRunning = true
+            return true
+        }
+
+        guard isDownloaded else {
+            isServerRunning = false
+            return false
+        }
+
+        guard let binaryPath = findServerBinary() else {
+            AppLogger.dictation.warning("llama-server binary not found on system")
+            isServerRunning = false
+            return false
+        }
+
+        guard !isStartingServer else {
+            for _ in 0..<20 {
+                try? await Task.sleep(nanoseconds: 100_000_000)
+                if isServerRunning { return true }
+            }
+            return isServerRunning
+        }
+
+        isStartingServer = true
+        defer { isStartingServer = false }
+
+        // Clean up previous process handle
+        if let proc = serverProcess, proc.isRunning {
+            proc.terminate()
+        }
+        serverProcess = nil
+
+        // Clean up any stale process occupying the port
+        let killTask = Process()
+        killTask.executableURL = URL(fileURLWithPath: "/usr/bin/pkill")
+        killTask.arguments = ["-f", "llama-server.*\(Self.serverPort)"]
+        try? killTask.run()
+        killTask.waitUntilExit()
+
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: binaryPath)
+        proc.arguments = [
+            "-m", modelFileURL.path,
+            "--port", "\(Self.serverPort)",
+            "-ngl", "99",
+            "--host", "127.0.0.1",
+            "-c", "512",
+            "--log-disable"
+        ]
+        proc.standardOutput = FileHandle.nullDevice
+        proc.standardError = FileHandle.nullDevice
+
+        do {
+            try proc.run()
+            serverProcess = proc
+        } catch {
+            AppLogger.dictation.error("Failed to run llama-server: \(error.localizedDescription)")
+            isServerRunning = false
+            return false
+        }
+
+        // Wait for health check up to 3 seconds
+        for _ in 0..<30 {
+            try? await Task.sleep(nanoseconds: 100_000_000)
+            if await checkHealth() {
+                isServerRunning = true
+                AppLogger.dictation.notice("llama-server started successfully on port \(Self.serverPort)")
+                return true
+            }
+        }
+
+        isServerRunning = false
+        AppLogger.dictation.error("llama-server failed to respond to health check within 3s")
+        return false
+    }
+
+    /// Stops the local llama-server background process.
+    public func stopServer() {
+        if let proc = serverProcess, proc.isRunning {
+            proc.terminate()
+        }
+        serverProcess = nil
+        isServerRunning = false
+
+        let killTask = Process()
+        killTask.executableURL = URL(fileURLWithPath: "/usr/bin/pkill")
+        killTask.arguments = ["-f", "llama-server.*\(Self.serverPort)"]
+        try? killTask.run()
+        killTask.waitUntilExit()
     }
 
     // MARK: - Normalization Pipeline
@@ -274,32 +465,21 @@ public final class S1MiniEngine: ObservableObject {
     /// User message starts with control line: `[Styling: ...] [Structure: ...] [Context: ...]`.
     /// Assistant turn is pre-seeded with `<think>\n\n</think>\n\n` to enforce `enable_thinking=false`.
     public func buildPrompt(for rawTranscript: String) -> String {
-        """
-        <|im_start|>system
-        You are a text normalizer for speech-to-text transcripts. The input begins with a control line specifying the styling, structure, and context settings; clean the transcript to match those settings and output only the cleaned text.<|im_end|>
-        <|im_start|>user
-        [Styling: \(styling.rawValue)] [Structure: \(structure.rawValue)] [Context: \(context.rawValue)]
-        \(rawTranscript)<|im_end|>
-        <|im_start|>assistant
-        <think>
-
-        </think>
-
-        """
+        "<|im_start|>system\nYou are a text normalizer for speech-to-text transcripts. The input begins with a control line specifying the styling, structure, and context settings; clean the transcript to match those settings and output only the cleaned text.<|im_end|>\n<|im_start|>user\n[Styling: \(styling.rawValue)] [Structure: \(structure.rawValue)] [Context: \(context.rawValue)]\n\(rawTranscript)<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
     }
 
     // MARK: - Inference Execution
 
     private func queryLocalServer(prompt: String) async -> String? {
-        guard let url = URL(string: "http://127.0.0.1:8080/completion") else { return nil }
+        guard let url = URL(string: "http://127.0.0.1:\(Self.serverPort)/completion") else { return nil }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.timeoutInterval = 0.05
+        request.timeoutInterval = 3.0
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
 
         let body: [String: Any] = [
             "prompt": prompt,
-            "n_predict": 256,
+            "n_predict": 128,
             "temperature": 0.0,
             "stop": ["<|im_end|>", "<|endoftext|>"]
         ]
@@ -322,9 +502,14 @@ public final class S1MiniEngine: ObservableObject {
     }
 
     private func runInference(rawText: String) async -> String? {
+        if !isServerRunning {
+            let ready = await ensureServerRunning()
+            guard ready else { return nil }
+        }
+
         let prompt = buildPrompt(for: rawText)
 
-        // 1. Try warm local server (sub-50ms)
+        // Query warm local server (sub-150ms)
         if let output = await queryLocalServer(prompt: prompt) {
             let cleaned = cleanModelOutput(output, input: rawText)
             if !cleaned.isEmpty {
@@ -332,8 +517,6 @@ public final class S1MiniEngine: ObservableObject {
             }
         }
 
-        // 2. Cold process spawn is bypassed on the user-facing release path to prevent 3.5s lag.
-        // Rule-based speech normalizer executes instantly (<1ms).
         return nil
     }
 

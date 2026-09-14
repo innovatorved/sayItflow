@@ -72,6 +72,11 @@ final class AppState: ObservableObject {
         }
 
         checkVozModelStatus()
+        Task {
+            if S1MiniEngine.shared.isDownloaded && S1MiniEngine.shared.isEnabled {
+                await S1MiniEngine.shared.ensureServerRunning()
+            }
+        }
     }
 
     func checkVozModelStatus() {
@@ -242,6 +247,7 @@ final class AppState: ObservableObject {
     func shutdown() {
         coordinator?.cancel(reason: "shutdown")
         hotkeyEngine?.stop()
+        S1MiniEngine.shared.stopServer()
     }
 
     func noteWords(in text: String) {

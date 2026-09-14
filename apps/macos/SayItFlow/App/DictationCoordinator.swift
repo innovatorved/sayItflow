@@ -189,17 +189,6 @@ final class DictationCoordinator {
                     self.appState?.partialTranscript = transcript
                     self.appState?.noteWords(in: transcript)
 
-                    let wordCount = transcript.split { $0.isWhitespace || $0.isNewline }.count
-                    let engineName = (S1MiniEngine.shared.isEnabled && isEnglish) ? "Voz + S1-mini" : "Voz"
-                    DictationAnalytics.shared.record(
-                        startedAt: startedAt,
-                        words: wordCount,
-                        chars: transcript.count,
-                        chunksCommitted: 1,
-                        mode: "batch",
-                        engine: engineName,
-                        outcome: "done"
-                    )
                     // Only route to onboarding/demo handler if the user
                     // started dictation from SayItFlow itself (its own window).
                     // When pinnedApp is an external app, always inject there.

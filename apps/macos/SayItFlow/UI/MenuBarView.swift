@@ -24,7 +24,7 @@ struct MenuBarView: View {
                 MenuActionRow(
                     id: "dashboard",
                     title: "Open Studio Dashboard",
-                    detail: "Speech stats, Voz engine, settings",
+                    detail: "Voz engine, speech settings, test",
                     systemImage: "macwindow",
                     isHovered: hoveredRow == "dashboard"
                 ) {

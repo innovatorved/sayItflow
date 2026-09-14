@@ -84,4 +84,15 @@ final class S1MiniEngineTests: XCTestCase {
         XCTAssertTrue(normalized.contains("the project"))
         XCTAssertFalse(normalized.contains("the the"))
     }
+
+    func testServerPortMatchesConfiguredConstant() {
+        XCTAssertEqual(S1MiniEngine.serverPort, 58231)
+    }
+
+    func testFindServerBinary() {
+        // Verifies the discovery logic finds llama-server if installed
+        if FileManager.default.isExecutableFile(atPath: "/opt/homebrew/bin/llama-server") {
+            XCTAssertNotNil(engine.findServerBinary())
+        }
+    }
 }

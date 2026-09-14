@@ -5,9 +5,7 @@ enum MainWindowSection: String, CaseIterable, Identifiable, Hashable {
     case status
     case dictation
     case text
-    case analytics
     case permissions
-    case diagnostics
     case about
 
     var id: String { rawValue }
@@ -17,9 +15,7 @@ enum MainWindowSection: String, CaseIterable, Identifiable, Hashable {
         case .status: "Status"
         case .dictation: "Dictation"
         case .text: "Audio & System"
-        case .analytics: "Analytics"
         case .permissions: "Permissions"
-        case .diagnostics: "Diagnostics & Logs"
         case .about: "About"
         }
     }
@@ -29,9 +25,7 @@ enum MainWindowSection: String, CaseIterable, Identifiable, Hashable {
         case .status: "waveform.circle"
         case .dictation: "mic"
         case .text: "gearshape"
-        case .analytics: "chart.bar.xaxis"
         case .permissions: "lock.shield"
-        case .diagnostics: "stethoscope"
         case .about: "info.circle"
         }
     }
@@ -41,7 +35,6 @@ struct DashboardView: View {
     @EnvironmentObject private var appState: AppState
     @ObservedObject private var settings = AppSettings.shared
     @ObservedObject private var engineSettings = EngineSettings.shared
-    @ObservedObject private var analytics = DictationAnalytics.shared
     @ObservedObject private var vozEngine = VozEngine.shared
     @ObservedObject private var s1Mini = S1MiniEngine.shared
 
@@ -53,8 +46,6 @@ struct DashboardView: View {
     @State private var testInjectionResult: String = ""
     @State private var testInjectionCountdown: Int = 0
     @State private var isTestingInjection: Bool = false
-    @State private var copiedReport: Bool = false
-    @State private var recentLogsList: [String] = []
 
     var initialSection: MainWindowSection?
 
@@ -96,7 +87,6 @@ struct DashboardView: View {
             if selection == .status {
                 configureTestInjection()
             }
-            refreshLogs()
             vozEngine.refreshStatus()
             s1Mini.refreshStatus()
         }
@@ -106,14 +96,10 @@ struct DashboardView: View {
             } else {
                 appState.clearOnboardingHandlers()
             }
-            if section == .diagnostics {
-                refreshLogs()
-            }
         }
         .onDisappear { appState.clearOnboardingHandlers() }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             appState.refreshPermissionStatuses()
-            refreshLogs()
             vozEngine.refreshStatus()
         }
     }
@@ -148,9 +134,7 @@ struct DashboardView: View {
         case .status: "System health, speech recognition engine, and quick test."
         case .dictation: "Hotkey trigger and language settings for Voz speech recognition."
         case .text: "Output formatting, auto-capitalization, and text polish."
-        case .analytics: "On-device transcription statistics and historical logs."
         case .permissions: "System accessibility and audio input access control."
-        case .diagnostics: "Diagnostics report, event trace logs, and injection testing."
         case .about: "SayItFlow version information and open-source models."
         }
     }
@@ -164,12 +148,8 @@ struct DashboardView: View {
             dictationSettings
         case .text:
             textSettings
-        case .analytics:
-            analyticsDetail
         case .permissions:
             permissionsDetail
-        case .diagnostics:
-            diagnosticsDetail
         case .about:
             aboutDetail
         }
@@ -538,95 +518,6 @@ struct DashboardView: View {
         }
     }
 
-    // MARK: - Analytics Detail
-
-    private var analyticsDetail: some View {
-        VStack(spacing: 16) {
-            HStack(spacing: 16) {
-                statCard(title: "Sessions", value: "\(analytics.totalSessions)")
-                statCard(title: "Words Dictated", value: "\(analytics.totalWords)")
-                statCard(title: "Speaking Time", value: Self.formatDuration(analytics.totalDurationSeconds))
-                statCard(title: "Avg Words", value: "\(analytics.averageWordsPerSession)")
-            }
-
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Text("Recent Sessions")
-                        .font(.system(size: 14, weight: .semibold))
-                        .tracking(-0.02)
-                        .foregroundStyle(DesignTokens.textPrimary)
-                    Spacer()
-                    if !analytics.recentSessions.isEmpty {
-                        Button("Clear History", role: .destructive) {
-                            analytics.reset()
-                        }
-                        .buttonStyle(MonochromeOutlineButtonStyle(isCompact: true))
-                    }
-                }
-
-                if analytics.recentSessions.isEmpty {
-                    Text("No sessions recorded yet.")
-                        .font(.system(size: 12))
-                        .foregroundStyle(DesignTokens.textMuted)
-                        .padding(.vertical, 12)
-                } else {
-                    VStack(spacing: 0) {
-                        ForEach(analytics.recentSessions) { session in
-                            HStack {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(session.startedAt, style: .date)
-                                        .font(.system(size: 12, weight: .medium))
-                                        .foregroundStyle(DesignTokens.textPrimary)
-                                    Text("\(Self.formatDuration(session.durationSeconds)) · \(session.engine)")
-                                        .font(.system(size: 11))
-                                        .foregroundStyle(DesignTokens.textSecondary)
-                                }
-                                Spacer()
-                                Text("\(session.words)w")
-                                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                                    .foregroundStyle(DesignTokens.textPrimary)
-                                StatusBadge(kind: Self.badge(for: session.outcome), text: session.outcome)
-                            }
-                            .padding(.vertical, 8)
-                            Divider().overlay(DesignTokens.borderSubtle)
-                        }
-                    }
-                }
-            }
-            .monochromeCard()
-        }
-    }
-
-    private func statCard(title: String, value: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.system(size: 11, weight: .medium, design: .monospaced))
-                .foregroundStyle(DesignTokens.textMuted)
-            Text(value)
-                .font(.system(size: 18, weight: .semibold, design: .monospaced))
-                .foregroundStyle(DesignTokens.textPrimary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .monochromeCard(padding: 12)
-    }
-
-    private static func formatDuration(_ seconds: Double) -> String {
-        let total = Int(seconds.rounded())
-        if total >= 60 {
-            return "\(total / 60)m \(total % 60)s"
-        }
-        return "\(total)s"
-    }
-
-    private static func badge(for outcome: String) -> StatusBadgeKind {
-        switch outcome {
-        case "done": .granted
-        case "stalled": .warning
-        case "error": .denied
-        default: .info
-        }
-    }
-
     // MARK: - Permissions Detail
 
     private var permissionsDetail: some View {
@@ -654,67 +545,6 @@ struct DashboardView: View {
                 }
                 .monochromeCard(padding: 12)
             }
-        }
-    }
-
-    // MARK: - Diagnostics Detail
-
-    private var diagnosticsDetail: some View {
-        VStack(spacing: 16) {
-            HStack(spacing: 12) {
-                Button(copiedReport ? "✓ Copied Report" : "Copy Diagnostic Report") {
-                    let report = DiagnosticReport.generate()
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(report, forType: .string)
-                    copiedReport = true
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                        copiedReport = false
-                    }
-                }
-                .buttonStyle(MonochromePrimaryButtonStyle())
-
-                Button("Open Logs Folder") {
-                    NSWorkspace.shared.open(SessionTrace.logsDirectory)
-                }
-                .buttonStyle(MonochromeOutlineButtonStyle())
-
-                Spacer()
-
-                Button("Refresh") { refreshLogs() }
-                    .buttonStyle(MonochromeGhostButtonStyle())
-            }
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Event Trace Logs")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(DesignTokens.textPrimary)
-
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 3) {
-                        if recentLogsList.isEmpty {
-                            Text("No trace logs yet.")
-                                .font(.system(size: 11, design: .monospaced))
-                                .foregroundStyle(DesignTokens.textMuted)
-                        } else {
-                            ForEach(Array(recentLogsList.enumerated()), id: \.offset) { _, line in
-                                Text(line)
-                                    .font(.system(size: 11, design: .monospaced))
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .foregroundStyle(DesignTokens.textSecondary)
-                                    .textSelection(.enabled)
-                            }
-                        }
-                    }
-                    .padding(8)
-                }
-                .frame(minHeight: 220, maxHeight: 350)
-                .background(DesignTokens.surfaceSubtle, in: RoundedRectangle(cornerRadius: DesignTokens.radiusMd))
-                .overlay(
-                    RoundedRectangle(cornerRadius: DesignTokens.radiusMd)
-                        .stroke(DesignTokens.borderSubtle, lineWidth: 1)
-                )
-            }
-            .monochromeCard()
         }
     }
 
@@ -774,10 +604,6 @@ struct DashboardView: View {
             }
             .monochromeCard()
         }
-    }
-
-    private func refreshLogs() {
-        recentLogsList = SessionTrace.recentLogs(limit: 80)
     }
 
     private func fix(_ kind: PermissionKind) async {
