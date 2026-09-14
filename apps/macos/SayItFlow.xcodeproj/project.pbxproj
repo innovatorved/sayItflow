@@ -1,0 +1,795 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		B10000000000000000000003 /* EngineSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000003 /* EngineSettings.swift */; };
+		B10000000000000000000004 /* PolishOutputGuard.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000004 /* PolishOutputGuard.swift */; };
+		A10000000000000000000001 /* SayItFlowApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000001 /* SayItFlowApp.swift */; };
+		A10000000000000000000002 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000002 /* AppDelegate.swift */; };
+		A10000000000000000000003 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000003 /* AppState.swift */; };
+		A10000000000000000000004 /* DictationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000004 /* DictationCoordinator.swift */; };
+		A10000000000000000000005 /* HotkeyEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000005 /* HotkeyEngine.swift */; };
+		A10000000000000000000006 /* ShortcutSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000006 /* ShortcutSettings.swift */; };
+		A10000000000000000000007 /* AudioInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000007 /* AudioInput.swift */; };
+		A10000000000000000000014 /* TextInjector.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000014 /* TextInjector.swift */; };
+		A10000000000000000000015 /* DesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000015 /* DesignTokens.swift */; };
+		A10000000000000000000018 /* StatusBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000018 /* StatusBadge.swift */; };
+		A10000000000000000000019 /* RecordingHUD.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000019 /* RecordingHUD.swift */; };
+		A10000000000000000000020 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000020 /* SettingsView.swift */; };
+		A10000000000000000000021 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000021 /* OnboardingView.swift */; };
+		A10000000000000000000022 /* MenuBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000022 /* MenuBarView.swift */; };
+		A10000000000000000000023 /* Permissions.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000023 /* Permissions.swift */; };
+		A10000000000000000000024 /* Vocabulary.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000024 /* Vocabulary.swift */; };
+		A10000000000000000000025 /* AppContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000025 /* AppContext.swift */; };
+		A10000000000000000000026 /* LaunchAtLoginHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000026 /* LaunchAtLoginHelper.swift */; };
+		A10000000000000000000027 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000027 /* Assets.xcassets */; };
+		A10000000000000000000028 /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = A50000000000000000000001 /* KeyboardShortcuts */; };
+		V10000000000000000000001 /* Voz in Frameworks */ = {isa = PBXBuildFile; productRef = V00000000000000000000001 /* Voz */; };
+		V10000000000000000000002 /* VozEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = V20000000000000000000002 /* VozEngine.swift */; };
+		S10000000000000000000001 /* S1MiniEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = S20000000000000000000001 /* S1MiniEngine.swift */; };
+		A10000000000000000000029 /* OnboardingWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000030 /* OnboardingWindowController.swift */; };
+		A10000000000000000000030 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000031 /* DashboardView.swift */; };
+		A10000000000000000000031 /* DashboardWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000032 /* DashboardWindowController.swift */; };
+		A10000000000000000000033 /* HotkeyKeyCap.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000033 /* HotkeyKeyCap.swift */; };
+		A10000000000000000000034 /* VoiceMarkView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000034 /* VoiceMarkView.swift */; };
+		A10000000000000000000035 /* SetupStep.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000035 /* SetupStep.swift */; };
+		A10000000000000000000037 /* PermissionStepView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000037 /* PermissionStepView.swift */; };
+		C10000000000000000000001 /* HoldSpaceKeyLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000001 /* HoldSpaceKeyLogic.swift */; };
+		C10000000000000000000002 /* DictationSessionGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000002 /* DictationSessionGate.swift */; };
+		C10000000000000000000003 /* PermissionsLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000003 /* PermissionsLogic.swift */; };
+		C10000000000000000000004 /* AXHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000004 /* AXHelpers.swift */; };
+		C10000000000000000000005 /* AppLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000005 /* AppLogger.swift */; };
+		C10000000000000000000006 /* SayItFlowError.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000006 /* SayItFlowError.swift */; };
+		C10000000000000000000007 /* ChunkBoundaryDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000007 /* ChunkBoundaryDetector.swift */; };
+		C10000000000000000000009 /* InjectionSessionGuardLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000009 /* InjectionSessionGuardLogic.swift */; };
+		C10000000000000000000010 /* SetupStepLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000010 /* SetupStepLogic.swift */; };
+		C10000000000000000000011 /* LivePartialMergeLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000011 /* LivePartialMergeLogic.swift */; };
+		C10000000000000000000012 /* LiveInjectionPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000012 /* LiveInjectionPolicy.swift */; };
+		D10000000000000000000001 /* StreamingTextInjector.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20000000000000000000001 /* StreamingTextInjector.swift */; };
+		D10000000000000000000003 /* LiveTextSink.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20000000000000000000003 /* LiveTextSink.swift */; };
+		E10000000000000000000001 /* KeystrokeEmitter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20000000000000000000001 /* KeystrokeEmitter.swift */; };
+		E10000000000000000000002 /* InjectionSessionGuard.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20000000000000000000002 /* InjectionSessionGuard.swift */; };
+		E10000000000000000000003 /* InjectedChunkTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20000000000000000000003 /* InjectedChunkTracker.swift */; };
+		F10000000000000000000001 /* InjectionFallback.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000001 /* InjectionFallback.swift */; };
+		F10000000000000000000002 /* PasteboardRescue.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000002 /* PasteboardRescue.swift */; };
+		G10000000000000000000001 /* BuildInfo.generated.swift in Sources */ = {isa = PBXBuildFile; fileRef = G20000000000000000000001 /* BuildInfo.generated.swift */; };
+		G10000000000000000000002 /* AudioTapHelper.m in Sources */ = {isa = PBXBuildFile; fileRef = G20000000000000000000002 /* AudioTapHelper.m */; };
+		G10000000000000000000003 /* SessionTrace.swift in Sources */ = {isa = PBXBuildFile; fileRef = G20000000000000000000005 /* SessionTrace.swift */; };
+		G10000000000000000000006 /* DictationAnalytics.swift in Sources */ = {isa = PBXBuildFile; fileRef = G20000000000000000000006 /* DictationAnalytics.swift */; };
+		G10000000000000000000007 /* DiagnosticReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = G20000000000000000000007 /* DiagnosticReport.swift */; };
+		T10000000000000000000001 /* HoldSpaceKeyLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T20000000000000000000001 /* HoldSpaceKeyLogicTests.swift */; };
+		T10000000000000000000003 /* PermissionsLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T20000000000000000000003 /* PermissionsLogicTests.swift */; };
+		T10000000000000000000004 /* DictationSessionGateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T20000000000000000000004 /* DictationSessionGateTests.swift */; };
+		T10000000000000000000005 /* SayItFlowErrorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T20000000000000000000005 /* SayItFlowErrorTests.swift */; };
+		T10000000000000000000006 /* HotkeyEngineStopTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T20000000000000000000006 /* HotkeyEngineStopTests.swift */; };
+		T10000000000000000000007 /* ChunkBoundaryDetectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T20000000000000000000007 /* ChunkBoundaryDetectorTests.swift */; };
+		T10000000000000000000008 /* InjectedChunkTrackerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T20000000000000000000008 /* InjectedChunkTrackerTests.swift */; };
+		T10000000000000000000011 /* InjectionSessionGuardLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T20000000000000000000011 /* InjectionSessionGuardLogicTests.swift */; };
+		T10000000000000000000013 /* SetupStepLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T20000000000000000000013 /* SetupStepLogicTests.swift */; };
+		T10000000000000000000014 /* AudioInputLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T20000000000000000000014 /* AudioInputLifecycleTests.swift */; };
+		T10000000000000000000017 /* PasteboardRescueTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T20000000000000000000017 /* PasteboardRescueTests.swift */; };
+		T10000000000000000000019 /* KeystrokeEmitterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T20000000000000000000019 /* KeystrokeEmitterTests.swift */; };
+		T10000000000000000000020 /* PermissionSettingsURLTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T20000000000000000000020 /* PermissionSettingsURLTests.swift */; };
+		T10000000000000000000021 /* LivePartialMergeLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T20000000000000000000021 /* LivePartialMergeLogicTests.swift */; };
+		T10000000000000000000022 /* PolishOutputGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T20000000000000000000022 /* PolishOutputGuardTests.swift */; };
+		T100000000000000000000099 /* S1MiniEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T200000000000000000000099 /* S1MiniEngineTests.swift */; };
+		T100000000000000000000100 /* TextInjectorPipelineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T200000000000000000000100 /* TextInjectorPipelineTests.swift */; };
+		T10000000000000000000023 /* ReconcileFinalTranscriptTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T20000000000000000000023 /* ReconcileFinalTranscriptTests.swift */; };
+		T10000000000000000000024 /* ClosureLiveTextSinkFinalizeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T20000000000000000000024 /* ClosureLiveTextSinkFinalizeTests.swift */; };
+		T10000000000000000000025 /* DictationAnalyticsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T20000000000000000000025 /* DictationAnalyticsTests.swift */; };
+		T10000000000000000000028 /* LiveInjectionPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T20000000000000000000028 /* LiveInjectionPolicyTests.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		T90000000000000000000002 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A90000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A70000000000000000000001;
+			remoteInfo = SayItFlow;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		V20000000000000000000002 /* VozEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VozEngine.swift; sourceTree = "<group>"; };
+		S20000000000000000000001 /* S1MiniEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = S1MiniEngine.swift; sourceTree = "<group>"; };
+		B20000000000000000000003 /* EngineSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineSettings.swift; sourceTree = "<group>"; };
+		B20000000000000000000004 /* PolishOutputGuard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolishOutputGuard.swift; sourceTree = "<group>"; };
+		A20000000000000000000001 /* SayItFlowApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SayItFlowApp.swift; sourceTree = "<group>"; };
+		A20000000000000000000002 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		A20000000000000000000003 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
+		A20000000000000000000004 /* DictationCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationCoordinator.swift; sourceTree = "<group>"; };
+		A20000000000000000000005 /* HotkeyEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyEngine.swift; sourceTree = "<group>"; };
+		A20000000000000000000006 /* ShortcutSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutSettings.swift; sourceTree = "<group>"; };
+		A20000000000000000000007 /* AudioInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioInput.swift; sourceTree = "<group>"; };
+		A20000000000000000000014 /* TextInjector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextInjector.swift; sourceTree = "<group>"; };
+		A20000000000000000000015 /* DesignTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignTokens.swift; sourceTree = "<group>"; };
+		A20000000000000000000018 /* StatusBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBadge.swift; sourceTree = "<group>"; };
+		A20000000000000000000019 /* RecordingHUD.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingHUD.swift; sourceTree = "<group>"; };
+		A20000000000000000000020 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		A20000000000000000000021 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		A20000000000000000000022 /* MenuBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarView.swift; sourceTree = "<group>"; };
+		A20000000000000000000023 /* Permissions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Permissions.swift; sourceTree = "<group>"; };
+		A20000000000000000000024 /* Vocabulary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vocabulary.swift; sourceTree = "<group>"; };
+		A20000000000000000000025 /* AppContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppContext.swift; sourceTree = "<group>"; };
+		A20000000000000000000026 /* LaunchAtLoginHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchAtLoginHelper.swift; sourceTree = "<group>"; };
+		A20000000000000000000027 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A20000000000000000000028 /* SayItFlow.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SayItFlow.entitlements; sourceTree = "<group>"; };
+		A20000000000000000000029 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A20000000000000000000030 /* OnboardingWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingWindowController.swift; sourceTree = "<group>"; };
+		A20000000000000000000031 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
+		A20000000000000000000032 /* DashboardWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardWindowController.swift; sourceTree = "<group>"; };
+		A20000000000000000000033 /* HotkeyKeyCap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyKeyCap.swift; sourceTree = "<group>"; };
+		A20000000000000000000034 /* VoiceMarkView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceMarkView.swift; sourceTree = "<group>"; };
+		A20000000000000000000035 /* SetupStep.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupStep.swift; sourceTree = "<group>"; };
+		A20000000000000000000037 /* PermissionStepView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionStepView.swift; sourceTree = "<group>"; };
+		A30000000000000000000001 /* SayItFlow.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SayItFlow.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C20000000000000000000001 /* HoldSpaceKeyLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoldSpaceKeyLogic.swift; sourceTree = "<group>"; };
+		C20000000000000000000002 /* DictationSessionGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationSessionGate.swift; sourceTree = "<group>"; };
+		C20000000000000000000003 /* PermissionsLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionsLogic.swift; sourceTree = "<group>"; };
+		C20000000000000000000004 /* AXHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AXHelpers.swift; sourceTree = "<group>"; };
+		C20000000000000000000005 /* AppLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLogger.swift; sourceTree = "<group>"; };
+		C20000000000000000000006 /* SayItFlowError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SayItFlowError.swift; sourceTree = "<group>"; };
+		C20000000000000000000007 /* ChunkBoundaryDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChunkBoundaryDetector.swift; sourceTree = "<group>"; };
+		C20000000000000000000009 /* InjectionSessionGuardLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InjectionSessionGuardLogic.swift; sourceTree = "<group>"; };
+		C20000000000000000000010 /* SetupStepLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupStepLogic.swift; sourceTree = "<group>"; };
+		C20000000000000000000011 /* LivePartialMergeLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LivePartialMergeLogic.swift; sourceTree = "<group>"; };
+		C20000000000000000000012 /* LiveInjectionPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveInjectionPolicy.swift; sourceTree = "<group>"; };
+		D20000000000000000000001 /* StreamingTextInjector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingTextInjector.swift; sourceTree = "<group>"; };
+		D20000000000000000000003 /* LiveTextSink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveTextSink.swift; sourceTree = "<group>"; };
+		E20000000000000000000001 /* KeystrokeEmitter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeystrokeEmitter.swift; sourceTree = "<group>"; };
+		E20000000000000000000002 /* InjectionSessionGuard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InjectionSessionGuard.swift; sourceTree = "<group>"; };
+		E20000000000000000000003 /* InjectedChunkTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InjectedChunkTracker.swift; sourceTree = "<group>"; };
+		F20000000000000000000001 /* InjectionFallback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InjectionFallback.swift; sourceTree = "<group>"; };
+		F20000000000000000000002 /* PasteboardRescue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteboardRescue.swift; sourceTree = "<group>"; };
+		G20000000000000000000001 /* BuildInfo.generated.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildInfo.generated.swift; sourceTree = "<group>"; };
+		G20000000000000000000002 /* AudioTapHelper.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AudioTapHelper.m; sourceTree = "<group>"; };
+		G20000000000000000000003 /* AudioTapHelper.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AudioTapHelper.h; sourceTree = "<group>"; };
+		G20000000000000000000004 /* SayItFlow-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "SayItFlow-Bridging-Header.h"; sourceTree = "<group>"; };
+		G20000000000000000000005 /* SessionTrace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionTrace.swift; sourceTree = "<group>"; };
+		G20000000000000000000006 /* DictationAnalytics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationAnalytics.swift; sourceTree = "<group>"; };
+		G20000000000000000000007 /* DiagnosticReport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticReport.swift; sourceTree = "<group>"; };
+		T20000000000000000000001 /* HoldSpaceKeyLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoldSpaceKeyLogicTests.swift; sourceTree = "<group>"; };
+		T20000000000000000000003 /* PermissionsLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionsLogicTests.swift; sourceTree = "<group>"; };
+		T20000000000000000000004 /* DictationSessionGateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationSessionGateTests.swift; sourceTree = "<group>"; };
+		T20000000000000000000005 /* SayItFlowErrorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SayItFlowErrorTests.swift; sourceTree = "<group>"; };
+		T20000000000000000000006 /* HotkeyEngineStopTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyEngineStopTests.swift; sourceTree = "<group>"; };
+		T20000000000000000000007 /* ChunkBoundaryDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChunkBoundaryDetectorTests.swift; sourceTree = "<group>"; };
+		T20000000000000000000008 /* InjectedChunkTrackerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InjectedChunkTrackerTests.swift; sourceTree = "<group>"; };
+		T20000000000000000000011 /* InjectionSessionGuardLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InjectionSessionGuardLogicTests.swift; sourceTree = "<group>"; };
+		T20000000000000000000013 /* SetupStepLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupStepLogicTests.swift; sourceTree = "<group>"; };
+		T20000000000000000000014 /* AudioInputLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioInputLifecycleTests.swift; sourceTree = "<group>"; };
+		T20000000000000000000017 /* PasteboardRescueTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteboardRescueTests.swift; sourceTree = "<group>"; };
+		T20000000000000000000019 /* KeystrokeEmitterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeystrokeEmitterTests.swift; sourceTree = "<group>"; };
+		T20000000000000000000020 /* PermissionSettingsURLTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionSettingsURLTests.swift; sourceTree = "<group>"; };
+		T20000000000000000000021 /* LivePartialMergeLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LivePartialMergeLogicTests.swift; sourceTree = "<group>"; };
+		T20000000000000000000022 /* PolishOutputGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolishOutputGuardTests.swift; sourceTree = "<group>"; };
+		T200000000000000000000099 /* S1MiniEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = S1MiniEngineTests.swift; sourceTree = "<group>"; };
+		T200000000000000000000100 /* TextInjectorPipelineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextInjectorPipelineTests.swift; sourceTree = "<group>"; };
+		T20000000000000000000023 /* ReconcileFinalTranscriptTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReconcileFinalTranscriptTests.swift; sourceTree = "<group>"; };
+		T20000000000000000000024 /* ClosureLiveTextSinkFinalizeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClosureLiveTextSinkFinalizeTests.swift; sourceTree = "<group>"; };
+		T20000000000000000000025 /* DictationAnalyticsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationAnalyticsTests.swift; sourceTree = "<group>"; };
+		T20000000000000000000028 /* LiveInjectionPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveInjectionPolicyTests.swift; sourceTree = "<group>"; };
+		T30000000000000000000001 /* SayItFlowTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SayItFlowTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A40000000000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000000000000000000028 /* KeyboardShortcuts in Frameworks */,
+				V10000000000000000000001 /* Voz in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A40000000000000000000002 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A60000000000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				A60000000000000000000002 /* SayItFlow */,
+				T60000000000000000000001 /* SayItFlowTests */,
+				A60000000000000000000003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A60000000000000000000002 /* SayItFlow */ = {
+			isa = PBXGroup;
+			children = (
+				A20000000000000000000001 /* SayItFlowApp.swift */,
+				A20000000000000000000002 /* AppDelegate.swift */,
+				A60000000000000000000004 /* App */,
+				B60000000000000000000001 /* Bridge */,
+				C60000000000000000000001 /* Core */,
+				A60000000000000000000005 /* Input */,
+				A60000000000000000000006 /* Audio */,
+				A60000000000000000000007 /* Transcription */,
+				A60000000000000000000008 /* Polish */,
+				A60000000000000000000009 /* Injection */,
+				A60000000000000000000010 /* UI */,
+				A60000000000000000000011 /* Permissions */,
+				A60000000000000000000012 /* Support */,
+				A20000000000000000000027 /* Assets.xcassets */,
+				A20000000000000000000028 /* SayItFlow.entitlements */,
+				A20000000000000000000029 /* Info.plist */,
+				G20000000000000000000004 /* SayItFlow-Bridging-Header.h */,
+			);
+			path = SayItFlow;
+			sourceTree = "<group>";
+		};
+		A60000000000000000000003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A30000000000000000000001 /* SayItFlow.app */,
+				T30000000000000000000001 /* SayItFlowTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+
+		B60000000000000000000001 /* Bridge */ = {
+			isa = PBXGroup;
+			children = (
+				B20000000000000000000003 /* EngineSettings.swift */,
+			);
+			path = Bridge;
+			sourceTree = "<group>";
+		};
+		A60000000000000000000004 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				A20000000000000000000003 /* AppState.swift */,
+				A20000000000000000000004 /* DictationCoordinator.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		A60000000000000000000005 /* Input */ = {
+			isa = PBXGroup;
+			children = (
+				A20000000000000000000005 /* HotkeyEngine.swift */,
+				A20000000000000000000006 /* ShortcutSettings.swift */,
+			);
+			path = Input;
+			sourceTree = "<group>";
+		};
+		A60000000000000000000006 /* Audio */ = {
+			isa = PBXGroup;
+			children = (
+				A20000000000000000000007 /* AudioInput.swift */,
+				G20000000000000000000002 /* AudioTapHelper.m */,
+				G20000000000000000000003 /* AudioTapHelper.h */,
+			);
+			path = Audio;
+			sourceTree = "<group>";
+		};
+		A60000000000000000000007 /* Transcription */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Transcription;
+			sourceTree = "<group>";
+		};
+		A60000000000000000000008 /* Polish */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Polish;
+			sourceTree = "<group>";
+		};
+		A60000000000000000000009 /* Injection */ = {
+			isa = PBXGroup;
+			children = (
+				A20000000000000000000014 /* TextInjector.swift */,
+				D20000000000000000000001 /* StreamingTextInjector.swift */,
+				D20000000000000000000003 /* LiveTextSink.swift */,
+				E20000000000000000000001 /* KeystrokeEmitter.swift */,
+				E20000000000000000000002 /* InjectionSessionGuard.swift */,
+				E20000000000000000000003 /* InjectedChunkTracker.swift */,
+				F20000000000000000000001 /* InjectionFallback.swift */,
+				F20000000000000000000002 /* PasteboardRescue.swift */,
+			);
+			path = Injection;
+			sourceTree = "<group>";
+		};
+		A60000000000000000000010 /* UI */ = {
+			isa = PBXGroup;
+			children = (
+				A60000000000000000000013 /* Design */,
+				A20000000000000000000019 /* RecordingHUD.swift */,
+				A20000000000000000000020 /* SettingsView.swift */,
+				A20000000000000000000021 /* OnboardingView.swift */,
+				A20000000000000000000035 /* SetupStep.swift */,
+				A20000000000000000000030 /* OnboardingWindowController.swift */,
+				A20000000000000000000031 /* DashboardView.swift */,
+				A20000000000000000000032 /* DashboardWindowController.swift */,
+				A20000000000000000000022 /* MenuBarView.swift */,
+			);
+			path = UI;
+			sourceTree = "<group>";
+		};
+		A60000000000000000000011 /* Permissions */ = {
+			isa = PBXGroup;
+			children = (
+				A20000000000000000000023 /* Permissions.swift */,
+			);
+			path = Permissions;
+			sourceTree = "<group>";
+		};
+		A60000000000000000000012 /* Support */ = {
+			isa = PBXGroup;
+			children = (
+				A20000000000000000000024 /* Vocabulary.swift */,
+				A20000000000000000000025 /* AppContext.swift */,
+				A20000000000000000000026 /* LaunchAtLoginHelper.swift */,
+			);
+			path = Support;
+			sourceTree = "<group>";
+		};
+		A60000000000000000000013 /* Design */ = {
+			isa = PBXGroup;
+			children = (
+				A20000000000000000000015 /* DesignTokens.swift */,
+				A20000000000000000000018 /* StatusBadge.swift */,
+				A20000000000000000000033 /* HotkeyKeyCap.swift */,
+				A20000000000000000000034 /* VoiceMarkView.swift */,
+				A20000000000000000000037 /* PermissionStepView.swift */,
+			);
+			path = Design;
+			sourceTree = "<group>";
+		};
+		C60000000000000000000001 /* Core */ = {
+			isa = PBXGroup;
+			children = (
+				C20000000000000000000001 /* HoldSpaceKeyLogic.swift */,
+				V20000000000000000000002 /* VozEngine.swift */,
+				S20000000000000000000001 /* S1MiniEngine.swift */,
+				C20000000000000000000002 /* DictationSessionGate.swift */,
+				C20000000000000000000003 /* PermissionsLogic.swift */,
+				C20000000000000000000004 /* AXHelpers.swift */,
+				C20000000000000000000005 /* AppLogger.swift */,
+				C20000000000000000000006 /* SayItFlowError.swift */,
+				B20000000000000000000004 /* PolishOutputGuard.swift */,
+				C20000000000000000000007 /* ChunkBoundaryDetector.swift */,
+				C20000000000000000000009 /* InjectionSessionGuardLogic.swift */,
+				C20000000000000000000010 /* SetupStepLogic.swift */,
+				C20000000000000000000011 /* LivePartialMergeLogic.swift */,
+				C20000000000000000000012 /* LiveInjectionPolicy.swift */,
+				G20000000000000000000001 /* BuildInfo.generated.swift */,
+				G20000000000000000000005 /* SessionTrace.swift */,
+				G20000000000000000000006 /* DictationAnalytics.swift */,
+				G20000000000000000000007 /* DiagnosticReport.swift */,
+			);
+			path = Core;
+			sourceTree = "<group>";
+		};
+		T60000000000000000000001 /* SayItFlowTests */ = {
+			isa = PBXGroup;
+			children = (
+				T20000000000000000000001 /* HoldSpaceKeyLogicTests.swift */,
+				T20000000000000000000003 /* PermissionsLogicTests.swift */,
+				T20000000000000000000004 /* DictationSessionGateTests.swift */,
+				T20000000000000000000005 /* SayItFlowErrorTests.swift */,
+				T20000000000000000000006 /* HotkeyEngineStopTests.swift */,
+				T20000000000000000000007 /* ChunkBoundaryDetectorTests.swift */,
+				T20000000000000000000008 /* InjectedChunkTrackerTests.swift */,
+				T20000000000000000000011 /* InjectionSessionGuardLogicTests.swift */,
+				T20000000000000000000013 /* SetupStepLogicTests.swift */,
+				T20000000000000000000014 /* AudioInputLifecycleTests.swift */,
+				T20000000000000000000017 /* PasteboardRescueTests.swift */,
+				T20000000000000000000020 /* PermissionSettingsURLTests.swift */,
+				T20000000000000000000021 /* LivePartialMergeLogicTests.swift */,
+				T20000000000000000000022 /* PolishOutputGuardTests.swift */,
+				T200000000000000000000099 /* S1MiniEngineTests.swift */,
+				T200000000000000000000100 /* TextInjectorPipelineTests.swift */,
+				T20000000000000000000023 /* ReconcileFinalTranscriptTests.swift */,
+				T20000000000000000000024 /* ClosureLiveTextSinkFinalizeTests.swift */,
+				T20000000000000000000025 /* DictationAnalyticsTests.swift */,
+				T20000000000000000000028 /* LiveInjectionPolicyTests.swift */,
+				T20000000000000000000019 /* KeystrokeEmitterTests.swift */,
+			);
+			path = SayItFlowTests;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A70000000000000000000001 /* SayItFlow */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A80000000000000000000003 /* Build configuration list for PBXNativeTarget "SayItFlow" */;
+			buildPhases = (
+				A70000000000000000000002 /* Sources */,
+				A40000000000000000000001 /* Frameworks */,
+				A70000000000000000000003 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = SayItFlow;
+			packageProductDependencies = (
+				A50000000000000000000001 /* KeyboardShortcuts */,
+				V00000000000000000000001 /* Voz */,
+			);
+			productName = SayItFlow;
+			productReference = A30000000000000000000001 /* SayItFlow.app */;
+			productType = "com.apple.product-type.application";
+		};
+		T70000000000000000000001 /* SayItFlowTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = T80000000000000000000001 /* Build configuration list for PBXNativeTarget "SayItFlowTests" */;
+			buildPhases = (
+				T70000000000000000000002 /* Sources */,
+				A40000000000000000000002 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				T90000000000000000000001 /* PBXTargetDependency */,
+			);
+			name = SayItFlowTests;
+			productName = SayItFlowTests;
+			productReference = T30000000000000000000001 /* SayItFlowTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A90000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2600;
+				LastUpgradeCheck = 2600;
+				TargetAttributes = {
+					A70000000000000000000001 = {
+						CreatedOnToolsVersion = 26.0;
+					};
+					T70000000000000000000001 = {
+						CreatedOnToolsVersion = 26.0;
+						TestTargetID = A70000000000000000000001;
+					};
+				};
+			};
+			buildConfigurationList = A80000000000000000000001 /* Build configuration list for PBXProject "SayItFlow" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = A60000000000000000000001;
+			packageReferences = (
+				A50000000000000000000002 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */,
+				V00000000000000000000002 /* XCRemoteSwiftPackageReference "desert-ant-core" */,
+			);
+			productRefGroup = A60000000000000000000003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A70000000000000000000001 /* SayItFlow */,
+				T70000000000000000000001 /* SayItFlowTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A70000000000000000000003 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000000000000000000027 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A70000000000000000000002 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000000000000000000001 /* SayItFlowApp.swift in Sources */,
+				V10000000000000000000002 /* VozEngine.swift in Sources */,
+				S10000000000000000000001 /* S1MiniEngine.swift in Sources */,
+				B10000000000000000000003 /* EngineSettings.swift in Sources */,
+				B10000000000000000000004 /* PolishOutputGuard.swift in Sources */,
+														A10000000000000000000002 /* AppDelegate.swift in Sources */,
+				A10000000000000000000003 /* AppState.swift in Sources */,
+				A10000000000000000000004 /* DictationCoordinator.swift in Sources */,
+				A10000000000000000000005 /* HotkeyEngine.swift in Sources */,
+				A10000000000000000000006 /* ShortcutSettings.swift in Sources */,
+				A10000000000000000000007 /* AudioInput.swift in Sources */,
+				A10000000000000000000014 /* TextInjector.swift in Sources */,
+				A10000000000000000000015 /* DesignTokens.swift in Sources */,
+				A10000000000000000000018 /* StatusBadge.swift in Sources */,
+				A10000000000000000000033 /* HotkeyKeyCap.swift in Sources */,
+				A10000000000000000000034 /* VoiceMarkView.swift in Sources */,
+				A10000000000000000000019 /* RecordingHUD.swift in Sources */,
+				A10000000000000000000020 /* SettingsView.swift in Sources */,
+				A10000000000000000000021 /* OnboardingView.swift in Sources */,
+				A10000000000000000000029 /* OnboardingWindowController.swift in Sources */,
+				A10000000000000000000030 /* DashboardView.swift in Sources */,
+				A10000000000000000000031 /* DashboardWindowController.swift in Sources */,
+				A10000000000000000000022 /* MenuBarView.swift in Sources */,
+				A10000000000000000000035 /* SetupStep.swift in Sources */,
+				A10000000000000000000037 /* PermissionStepView.swift in Sources */,
+				A10000000000000000000023 /* Permissions.swift in Sources */,
+				A10000000000000000000024 /* Vocabulary.swift in Sources */,
+				A10000000000000000000025 /* AppContext.swift in Sources */,
+				A10000000000000000000026 /* LaunchAtLoginHelper.swift in Sources */,
+				C10000000000000000000001 /* HoldSpaceKeyLogic.swift in Sources */,
+				C10000000000000000000002 /* DictationSessionGate.swift in Sources */,
+				C10000000000000000000003 /* PermissionsLogic.swift in Sources */,
+				C10000000000000000000004 /* AXHelpers.swift in Sources */,
+				C10000000000000000000005 /* AppLogger.swift in Sources */,
+				C10000000000000000000006 /* SayItFlowError.swift in Sources */,
+				C10000000000000000000007 /* ChunkBoundaryDetector.swift in Sources */,
+				C10000000000000000000009 /* InjectionSessionGuardLogic.swift in Sources */,
+				C10000000000000000000010 /* SetupStepLogic.swift in Sources */,
+				C10000000000000000000011 /* LivePartialMergeLogic.swift in Sources */,
+				C10000000000000000000012 /* LiveInjectionPolicy.swift in Sources */,
+				D10000000000000000000001 /* StreamingTextInjector.swift in Sources */,
+				D10000000000000000000003 /* LiveTextSink.swift in Sources */,
+				E10000000000000000000001 /* KeystrokeEmitter.swift in Sources */,
+				E10000000000000000000002 /* InjectionSessionGuard.swift in Sources */,
+				E10000000000000000000003 /* InjectedChunkTracker.swift in Sources */,
+				F10000000000000000000001 /* InjectionFallback.swift in Sources */,
+				F10000000000000000000002 /* PasteboardRescue.swift in Sources */,
+				G10000000000000000000001 /* BuildInfo.generated.swift in Sources */,
+				G10000000000000000000002 /* AudioTapHelper.m in Sources */,
+				G10000000000000000000003 /* SessionTrace.swift in Sources */,
+				G10000000000000000000006 /* DictationAnalytics.swift in Sources */,
+				G10000000000000000000007 /* DiagnosticReport.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		T70000000000000000000002 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				T10000000000000000000001 /* HoldSpaceKeyLogicTests.swift in Sources */,
+				T10000000000000000000003 /* PermissionsLogicTests.swift in Sources */,
+				T10000000000000000000004 /* DictationSessionGateTests.swift in Sources */,
+				T10000000000000000000005 /* SayItFlowErrorTests.swift in Sources */,
+				T10000000000000000000006 /* HotkeyEngineStopTests.swift in Sources */,
+				T10000000000000000000007 /* ChunkBoundaryDetectorTests.swift in Sources */,
+				T10000000000000000000008 /* InjectedChunkTrackerTests.swift in Sources */,
+				T10000000000000000000011 /* InjectionSessionGuardLogicTests.swift in Sources */,
+				T10000000000000000000013 /* SetupStepLogicTests.swift in Sources */,
+				T10000000000000000000014 /* AudioInputLifecycleTests.swift in Sources */,
+				T10000000000000000000017 /* PasteboardRescueTests.swift in Sources */,
+				T10000000000000000000020 /* PermissionSettingsURLTests.swift in Sources */,
+				T10000000000000000000019 /* KeystrokeEmitterTests.swift in Sources */,
+				T10000000000000000000021 /* LivePartialMergeLogicTests.swift in Sources */,
+				T10000000000000000000022 /* PolishOutputGuardTests.swift in Sources */,
+				T100000000000000000000099 /* S1MiniEngineTests.swift in Sources */,
+				T100000000000000000000100 /* TextInjectorPipelineTests.swift in Sources */,
+				T10000000000000000000023 /* ReconcileFinalTranscriptTests.swift in Sources */,
+				T10000000000000000000024 /* ClosureLiveTextSinkFinalizeTests.swift in Sources */,
+				T10000000000000000000025 /* DictationAnalyticsTests.swift in Sources */,
+				T10000000000000000000028 /* LiveInjectionPolicyTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		T90000000000000000000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A70000000000000000000001 /* SayItFlow */;
+			targetProxy = T90000000000000000000002 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		AA0000000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		AA0000000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				ONLY_ACTIVE_ARCH = YES;
+				ARCHS = arm64;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		AA0000000000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = SayItFlow/SayItFlow.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = X7B3MSL8U7;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_TESTABILITY = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = SayItFlow/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.2.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.innovatorved.sayitflow;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "SayItFlow/SayItFlow-Bridging-Header.h";
+				SWIFT_STRICT_CONCURRENCY = complete;
+			};
+			name = Debug;
+		};
+		AA0000000000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = SayItFlow/SayItFlow.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = X7B3MSL8U7;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				ARCHS = arm64;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = SayItFlow/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.2.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.innovatorved.sayitflow;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "SayItFlow/SayItFlow-Bridging-Header.h";
+				SWIFT_STRICT_CONCURRENCY = complete;
+			};
+			name = Release;
+		};
+		TA0000000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = X7B3MSL8U7;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.2.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.innovatorved.sayitflow.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SayItFlow.app/Contents/MacOS/SayItFlow";
+			};
+			name = Debug;
+		};
+		TA0000000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = X7B3MSL8U7;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.2.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.innovatorved.sayitflow.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SayItFlow.app/Contents/MacOS/SayItFlow";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A80000000000000000000001 /* Build configuration list for PBXProject "SayItFlow" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AA0000000000000000000001 /* Debug */,
+				AA0000000000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A80000000000000000000003 /* Build configuration list for PBXNativeTarget "SayItFlow" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AA0000000000000000000003 /* Debug */,
+				AA0000000000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		T80000000000000000000001 /* Build configuration list for PBXNativeTarget "SayItFlowTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				TA0000000000000000000001 /* Debug */,
+				TA0000000000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		A50000000000000000000002 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sindresorhus/KeyboardShortcuts";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.0.0;
+			};
+		};
+		V00000000000000000000002 /* XCRemoteSwiftPackageReference "desert-ant-core" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/Desert-Ant-Labs/desert-ant-core.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 3.1.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		A50000000000000000000001 /* KeyboardShortcuts */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A50000000000000000000002 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */;
+			productName = KeyboardShortcuts;
+		};
+		V00000000000000000000001 /* Voz */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = V00000000000000000000002 /* XCRemoteSwiftPackageReference "desert-ant-core" */;
+			productName = Voz;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = A90000000000000000000001 /* Project object */;
+}

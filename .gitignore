@@ -1,0 +1,40 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+
+# Xcode
+DerivedData/
+build/
+*.xcuserstate
+project.xcworkspace/xcuserdata/
+*.xcuserdatad/
+*.xcbkptlist
+*.ninja*
+*.hmap
+
+# Build Outputs & DMG
+*.dmg
+*.app
+build/
+dmg-staging/
+
+# Python Virtual Environments & Cache
+engine/.venv/
+.venv/
+venv/
+ENV/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+.cache/
+*.egg-info/
+dist/
+
+# Local Logs & Traces
+*.log
+*.trace

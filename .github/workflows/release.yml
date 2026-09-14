@@ -1,0 +1,78 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  engine-tests:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Bootstrap engine
+        run: SKIP_WARM=1 make bootstrap
+      - name: Unit tests
+        run: make test
+      - name: Smoke tests
+        run: SAYITLOCAL_SMOKE=1 make test-smoke
+
+  build-dmg:
+    needs: engine-tests
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Build notarized DMG
+        env:
+          SIGN_IDENTITY: ${{ secrets.APPLE_SIGN_IDENTITY }}
+          NOTARIZE: ${{ secrets.APPLE_SIGN_IDENTITY != '' && '1' || '0' }}
+          NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
+          NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
+          NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
+        run: |
+          chmod +x scripts/*.sh
+          SKIP_WARM=1 make bootstrap
+          make dmg
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SayItLocal-dmg
+          path: build/SayItLocal.dmg
+
+  homebrew-cask:
+    needs: build-dmg
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: SayItLocal-dmg
+          path: build
+      - name: Generate cask stub
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          SHA=$(shasum -a 256 build/SayItLocal.dmg | awk '{print $1}')
+          mkdir -p dist/Casks
+          cat > dist/Casks/sayitlocal.rb <<EOF
+          cask "sayitlocal" do
+            version "$VERSION"
+            sha256 "$SHA"
+            url "https://github.com/${{ github.repository }}/releases/download/${GITHUB_REF_NAME}/SayItLocal.dmg"
+            name "SayItLocal"
+            desc "Local MLX speech dictation for macOS"
+            homepage "https://github.com/${{ github.repository }}"
+            app "SayItLocal.app"
+          end
+          EOF
+          echo "Cask stub written to dist/Casks/sayitlocal.rb — publish to innovatorved/tap manually or via tap bot."
+      - uses: actions/upload-artifact@v4
+        with:
+          name: homebrew-cask-stub
+          path: dist/Casks/sayitlocal.rb
