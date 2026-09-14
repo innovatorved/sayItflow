@@ -89,6 +89,8 @@ public final class S1MiniEngine: ObservableObject {
 
     private var serverProcess: Process?
     private var isStartingServer: Bool = false
+    private var idleShutdownTask: Task<Void, Never>?
+    private static let idleShutdownSeconds: TimeInterval = 120
 
     @Published public var isEnabled: Bool {
         didSet {
@@ -164,11 +166,6 @@ public final class S1MiniEngine: ObservableObject {
 
         refreshStatus()
         setupLifecycleObservers()
-        if isDownloaded && isEnabled {
-            Task { [weak self] in
-                _ = await self?.ensureServerRunning()
-            }
-        }
     }
 
     private func setupLifecycleObservers() {
@@ -412,6 +409,18 @@ public final class S1MiniEngine: ObservableObject {
         killTask.waitUntilExit()
     }
 
+    // MARK: - Idle Shutdown
+
+    private func resetIdleShutdownTimer() {
+        idleShutdownTask?.cancel()
+        idleShutdownTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(Self.idleShutdownSeconds * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            await MainActor.run { self?.stopServer() }
+            AppLogger.dictation.notice("S1MiniEngine: llama-server stopped after idle timeout")
+        }
+    }
+
     // MARK: - Normalization Pipeline
 
     /// Normalizes a speech-to-text transcript.
@@ -446,6 +455,7 @@ public final class S1MiniEngine: ObservableObject {
             if let output = await runInference(rawText: trimmed) {
                 let elapsed = (CFAbsoluteTimeGetCurrent() - start) * 1000.0
                 lastLatencyMs = elapsed
+                resetIdleShutdownTimer()
                 return output
             }
         }
@@ -454,6 +464,7 @@ public final class S1MiniEngine: ObservableObject {
         let fallbackPolished = ruleBasedNormalize(trimmed)
         let elapsed = (CFAbsoluteTimeGetCurrent() - start) * 1000.0
         lastLatencyMs = elapsed
+        resetIdleShutdownTimer()
         return fallbackPolished
     }
 
@@ -552,31 +563,38 @@ public final class S1MiniEngine: ObservableObject {
 
     /// Instant, high-speed fallback speech normalizer.
     /// Collapses filler words, stutters, and normalizes capitalization.
+    /// Pre-compiled regex patterns for speech disfluency removal (allocated once).
+    nonisolated(unsafe) private static let fillerRegexes: [NSRegularExpression] = {
+        let patterns = [
+            "\\b(um|uh|erm|ah)\\b,?\\s*",
+            "\\b(like)\\b(?=\\s+like\\b)",
+            "\\b(you know)\\b,?\\s*(?=\\b(um|uh|like)\\b)"
+        ]
+        return patterns.compactMap {
+            try? NSRegularExpression(pattern: $0, options: .caseInsensitive)
+        }
+    }()
+
+    nonisolated(unsafe) private static let stutterRegex: NSRegularExpression? = {
+        try? NSRegularExpression(pattern: "\\b([A-Za-z]+)\\s+\\1\\b", options: .caseInsensitive)
+    }()
+
     nonisolated public func ruleBasedNormalize(_ text: String) -> String {
         guard !text.isEmpty else { return "" }
 
         var result = text
 
         // 1. Remove standalone speech disfluencies (case-insensitive)
-        let fillers = [
-            "\\b(um|uh|erm|ah)\\b,?\\s*",
-            "\\b(like)\\b(?=\\s+like\\b)",
-            "\\b(you know)\\b,?\\s*(?=\\b(um|uh|like)\\b)"
-        ]
-
-        for pattern in fillers {
-            if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) {
-                result = regex.stringByReplacingMatches(
-                    in: result,
-                    range: NSRange(location: 0, length: result.utf16.count),
-                    withTemplate: ""
-                )
-            }
+        for regex in Self.fillerRegexes {
+            result = regex.stringByReplacingMatches(
+                in: result,
+                range: NSRange(location: 0, length: result.utf16.count),
+                withTemplate: ""
+            )
         }
 
         // 2. Collapse immediate word repetitions ("the the" -> "the", "I I" -> "I")
-        let stutterPattern = "\\b([A-Za-z]+)\\s+\\1\\b"
-        if let regex = try? NSRegularExpression(pattern: stutterPattern, options: .caseInsensitive) {
+        if let regex = Self.stutterRegex {
             result = regex.stringByReplacingMatches(
                 in: result,
                 range: NSRange(location: 0, length: result.utf16.count),

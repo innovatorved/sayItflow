@@ -53,6 +53,7 @@ enum DiagnosticReport {
         - Voz Downloaded: \(VozEngine.shared.isDownloaded)
         - Voz Ready on Neural Engine: \(VozEngine.shared.isReady)
         - Spoken Language: \(engineSettings.selectedLanguage)
+        - Models Directory: \(modelsDir)
         """)
 
         // Active Focus Target

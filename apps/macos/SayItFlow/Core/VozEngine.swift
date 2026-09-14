@@ -20,6 +20,8 @@ final class VozEngine: ObservableObject {
 
     private var vozInstance: Voz?
     private var isInitializing = false
+    private var idleUnloadTask: Task<Void, Never>?
+    private static let idleTimeoutSeconds: TimeInterval = 120
 
     public struct Language: Identifiable, Hashable, Sendable {
         public let code: String
@@ -144,9 +146,31 @@ final class VozEngine: ObservableObject {
         let result = try await voz.transcribe(samples: samples, sampleRate: sampleRate)
         self.lastRealtimeFactor = result.realtimeFactor
         self.lastTranscriptionDuration = result.processingTime
+        resetIdleTimer()
         return result
         #else
         throw VozError.unsupportedPlatform
         #endif
+    }
+
+    // MARK: - Idle Unload
+
+    private func resetIdleTimer() {
+        idleUnloadTask?.cancel()
+        idleUnloadTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(Self.idleTimeoutSeconds * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            await self?.unloadModel()
+        }
+    }
+
+    /// Explicitly release Voz model memory and ANE residency after idle timeout.
+    func unloadModel() {
+        guard vozInstance != nil else { return }
+        vozInstance = nil
+        isReady = false
+        idleUnloadTask?.cancel()
+        idleUnloadTask = nil
+        AppLogger.dictation.notice("VozEngine: model unloaded after idle timeout")
     }
 }

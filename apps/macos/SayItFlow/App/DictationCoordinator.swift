@@ -5,7 +5,11 @@ import KeyboardShortcuts
 
 private final class AudioSampleCollector: @unchecked Sendable {
     private let lock = NSLock()
-    private var samples: [Float] = []
+    private var samples: [Float] = {
+        var arr = [Float]()
+        arr.reserveCapacity(16000 * 120) // Pre-allocate for ~120 seconds at 16kHz
+        return arr
+    }()
     private var sampleRate: Double = 16000.0
 
     func append(buffer: AVAudioPCMBuffer) {
@@ -282,7 +286,7 @@ final class DictationCoordinator {
                 await MainActor.run {
                     RecordingHUDController.shared.updateAudioLevel(level)
                 }
-                try? await Task.sleep(for: .milliseconds(40))
+                try? await Task.sleep(for: .milliseconds(100))
             }
         }
     }

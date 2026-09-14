@@ -1,3 +1,4 @@
+import Accelerate
 @preconcurrency import AVFoundation
 import CoreAudio
 import Foundation
@@ -441,10 +442,9 @@ final class AudioInput: @unchecked Sendable {
 
     private func computePeakLevel(_ buffer: AVAudioPCMBuffer) -> Float {
         guard let samples = buffer.floatChannelData?[0], buffer.frameLength > 0 else { return 0 }
-        let count = Int(buffer.frameLength)
-        var sumSquares: Float = 0
-        for i in 0..<count { sumSquares += samples[i] * samples[i] }
-        return min(max(sqrt(sumSquares / Float(count)) * 4, 0), 1)
+        var rms: Float = 0
+        vDSP_rmsqv(samples, 1, &rms, vDSP_Length(buffer.frameLength))
+        return min(max(rms * 4, 0), 1)
     }
 
     private func deliver(_ wrapped: SendablePCMBuffer) {

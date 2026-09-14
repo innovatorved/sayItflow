@@ -121,6 +121,10 @@ final class RecordingHUDController: NSObject {
         placementScreen = nil
         panel?.orderOut(nil)
         removeEscapeMonitors()
+        // Release panel and hosting view to reclaim memory when not dictating
+        panel?.contentView = nil
+        panel = nil
+        hostingView = nil
     }
 
     private var panelSize: CGSize {

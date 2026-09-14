@@ -72,11 +72,6 @@ final class AppState: ObservableObject {
         }
 
         checkVozModelStatus()
-        Task {
-            if S1MiniEngine.shared.isDownloaded && S1MiniEngine.shared.isEnabled {
-                await S1MiniEngine.shared.ensureServerRunning()
-            }
-        }
     }
 
     func checkVozModelStatus() {
@@ -86,9 +81,6 @@ final class AppState: ObservableObject {
         if vozModelReady {
             modelSetupMessage = "Voz Model Ready on Neural Engine"
             modelSetupProgress = 1.0
-            Task {
-                try? await VozEngine.shared.warmUp()
-            }
         } else {
             modelSetupMessage = "Voz model not downloaded (467 MB)"
             modelSetupProgress = 0
