@@ -35,10 +35,17 @@ final class TextInjectorPipelineTests: XCTestCase {
         XCTAssertTrue(success)
     }
 
-    func testS1MiniEngineNormalizationIsInstantaneous() async {
+    func testS1MiniEngineNormalizationIsInstantaneous() async throws {
+        guard ProcessInfo.processInfo.environment["RUN_S1_MINI_INTEGRATION_TESTS"] == "1" else {
+            throw XCTSkip("Set RUN_S1_MINI_INTEGRATION_TESTS=1 to run the local S1-mini server performance test")
+        }
+
         let engine = S1MiniEngine.shared
         engine.isEnabled = true
-        _ = await engine.ensureServerRunning()
+        guard await engine.ensureServerRunning() else {
+            XCTFail("S1-mini server was not ready for the requested integration test")
+            return
+        }
         let raw = "um so I I think the project is ready"
 
         let start = CFAbsoluteTimeGetCurrent()
