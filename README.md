@@ -36,7 +36,7 @@ When you press the hotkey again, the models stream back in while you speak — s
 
 **Key strengths**
 - **Private** — Audio never leaves your machine
-- **Fast** — Voz on the Apple Neural Engine (up to 290× real-time)
+- **Fast** — Voz on the Apple Neural Engine + CPU parallel pipeline (up to 640× real-time)
 - **Light** — Native Swift menu-bar app with intelligent model unloading
 - **Multilingual** — 25 languages
 - **Clean English** — S1-mini removes fillers, fixes punctuation & numbers

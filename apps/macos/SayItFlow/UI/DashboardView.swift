@@ -568,7 +568,7 @@ struct DashboardView: View {
                 Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 6) {
                     GridRow {
                         Text("Version").font(.system(size: 12)).foregroundStyle(DesignTokens.textSecondary)
-                        Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.2.0")
+                        Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.3.0")
                             .font(.system(size: 12, design: .monospaced))
                             .foregroundStyle(DesignTokens.textPrimary)
                     }
