@@ -39,7 +39,7 @@ jobs:
           cd apps/macos
           xcodebuild test \
             -scheme SayItFlow \
-            -destination 'platform=macOS' \
+            -destination 'platform=macOS,arch=arm64' \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO
