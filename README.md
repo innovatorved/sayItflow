@@ -52,7 +52,19 @@ When you press the hotkey again, the models stream back in while you speak — s
 
 ## Install
 
-### Download
+### Homebrew (Recommended)
+
+```bash
+brew tap innovatorved/tap
+brew install --cask sayitflow
+```
+
+To update later:
+```bash
+brew update && brew upgrade --cask sayitflow
+```
+
+### Manual Download
 Grab the latest `SayItFlow.dmg` from the [Releases](https://github.com/innovatorved/sayItflow/releases) page, drag it to `/Applications`, and launch.
 
 On first run grant:

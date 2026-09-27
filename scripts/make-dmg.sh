@@ -15,7 +15,7 @@ fi
 
 echo "==> Build SayItFlow.app"
 cd "$ROOT/apps/macos"
-xcodebuild -scheme "$SCHEME" -configuration "$CONFIG" -destination 'platform=macOS,arch=arm64' ARCHS=arm64 ONLY_ACTIVE_ARCH=YES build
+xcodebuild -scheme "$SCHEME" -configuration "$CONFIG" -destination 'platform=macOS,arch=arm64' ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO build
 
 APP="$(find "$DERIVED" -path "*/Build/Products/$CONFIG/SayItFlow.app" -type d 2>/dev/null | head -1)"
 if [[ -z "$APP" ]]; then
