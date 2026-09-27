@@ -80,7 +80,6 @@ make dmg
 | Normal space      | Quick tap on Spacebar                 |
 | Open dashboard    | Menu bar icon → Open Studio Dashboard |
 
----
 
 ## Architecture
 
@@ -97,7 +96,6 @@ Extra engineering for smoothness:
 - Pre-allocated 120-second ring buffer (zero mid-speech allocations)
 - Cached regexes & formatters
 
----
 
 ## License & Attribution
 
