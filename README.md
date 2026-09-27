@@ -8,8 +8,6 @@ Clean text appears instantly in any app.
 Runs entirely on-device with [Desert Ant Voz](https://desertant.com/models/voz/) on the Apple Neural Engine + S1-mini.  
 **Zero cloud. Near-zero idle footprint. Your audio never leaves your Mac.**
 
----
-
 ### Why most “local” dictation apps still feel heavy
 
 Other on-device tools keep large models loaded 24/7 (often 1.2–2.5 GB of RAM).  
@@ -26,7 +24,6 @@ When you press the hotkey again, the models stream back in while you speak — s
 | Active dictation         | ~1.1–1.3 GB     | ANE + Metal  |
 | Rapid successive use     | ~1.1–1.3 GB     | Instant      |
 
----
 
 ## What it does
 
@@ -41,18 +38,15 @@ When you press the hotkey again, the models stream back in while you speak — s
 - **Multilingual** — 25 languages
 - **Clean English** — S1-mini removes fillers, fixes punctuation & numbers
 
----
 
 ## Requirements
 
 - macOS 14.0+ (Sonoma or Sequoia)
 - Apple Silicon (M1 / M2 / M3 / M4 or newer)
 
----
+### Install
 
-## Install
-
-### Homebrew (Recommended)
+#### Homebrew 
 
 ```bash
 brew tap innovatorved/tap
@@ -64,13 +58,8 @@ To update later:
 brew update && brew upgrade --cask sayitflow
 ```
 
-### Manual Download
+#### Manual Download
 Grab the latest `SayItFlow.dmg` from the [Releases](https://github.com/innovatorved/sayItflow/releases) page, drag it to `/Applications`, and launch.
-
-On first run grant:
-1. Microphone
-2. Accessibility
-3. Input Monitoring
 
 ### Build from source
 
