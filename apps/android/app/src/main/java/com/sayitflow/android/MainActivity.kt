@@ -1,6 +1,7 @@
 package com.sayitflow.android
 
 import android.Manifest
+import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
@@ -17,6 +18,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
+import com.sayitflow.android.service.SayItFlowAccessibilityService
 import com.sayitflow.android.ui.DashboardScreen
 
 class MainActivity : ComponentActivity() {
@@ -62,7 +64,7 @@ class MainActivity : ComponentActivity() {
                         micLauncher.launch(Manifest.permission.RECORD_AUDIO)
                     },
                     onOpenAccessibilitySettings = {
-                        startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                        openAccessibilitySettings()
                     }
                 )
             }
@@ -74,6 +76,32 @@ class MainActivity : ComponentActivity() {
         val coordinator = SayItFlowCoordinator.getInstance(this)
         refreshPermissions(coordinator)
         coordinator.senseVoiceEngine.prepareAssetsOnDiskAsync()
+    }
+
+    private fun openAccessibilitySettings() {
+        val component = ComponentName(packageName, SayItFlowAccessibilityService::class.java.name)
+            .flattenToString()
+        val highlightIntent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+            val bundle = Bundle().apply {
+                putString(":settings:fragment_args_key", component)
+            }
+            putExtra(":settings:fragment_args_key", component)
+            putExtra(":settings:show_fragment_args", bundle)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        try {
+            startActivity(highlightIntent)
+        } catch (_: Exception) {
+            try {
+                startActivity(
+                    Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                )
+            } catch (_: Exception) {
+                startActivity(Intent(Settings.ACTION_SETTINGS))
+            }
+        }
     }
 
     private fun refreshPermissions(coordinator: SayItFlowCoordinator) {

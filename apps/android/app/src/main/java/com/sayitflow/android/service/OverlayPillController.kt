@@ -28,7 +28,8 @@ import kotlin.math.sin
  * - Automatically disappears (`hide()`) as soon as dictation completes.
  */
 class OverlayPillController(
-    private val serviceContext: Context
+    private val serviceContext: Context,
+    private val onPillClick: (() -> Unit)? = null
 ) {
 
     enum class HudMode {
@@ -116,7 +117,11 @@ class OverlayPillController(
     private fun ensureAttached(): MinimalWaveformPillView {
         var view = capsuleView
         if (view == null) {
-            view = MinimalWaveformPillView(serviceContext)
+            view = MinimalWaveformPillView(serviceContext).apply {
+                setOnClickListener {
+                    onPillClick?.invoke()
+                }
+            }
             capsuleView = view
         }
 
@@ -126,7 +131,6 @@ class OverlayPillController(
                 dpToPx(28f),
                 WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
                     WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
                 PixelFormat.TRANSLUCENT
             ).apply {

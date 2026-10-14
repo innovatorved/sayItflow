@@ -427,7 +427,14 @@ fun DashboardScreen(
             isSystemReady = isSystemFullyReady,
             triggerMode = triggerMode,
             isS1MiniEnabled = isS1MiniEnabled,
-            onClickStatus = { activeTab = AppTab.SETTINGS }
+            onClickStatus = { activeTab = AppTab.SETTINGS },
+            onClickTicker = {
+                if (!hasMicPermission) {
+                    onRequestMicPermission()
+                } else {
+                    onOpenAccessibilitySettings()
+                }
+            }
         )
 
         // 2. Main Scrollable Canvas
@@ -546,7 +553,8 @@ private fun LofiHeaderBar(
     isSystemReady: Boolean,
     triggerMode: SayItFlowCoordinator.TriggerMode,
     isS1MiniEnabled: Boolean,
-    onClickStatus: () -> Unit
+    onClickStatus: () -> Unit,
+    onClickTicker: () -> Unit = {}
 ) {
     val statusFill = if (isWhisperLoaded) AccentTeal else AccentYellow
     val statusLabel = when (asrEngineMode) {
@@ -677,6 +685,7 @@ private fun LofiHeaderBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(Ink)
+                .clickable { onClickTicker() }
                 .padding(horizontal = 16.dp, vertical = 7.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
@@ -693,9 +702,9 @@ private fun LofiHeaderBar(
                 )
                 Text(
                     text = if (isSystemReady) {
-                        "READY · ${triggerMode.title.uppercase()}"
+                        "READY · ${triggerMode.title.uppercase()} + A11Y SHORTCUT"
                     } else {
-                        "SETUP NEEDED · CHECK PERMISSIONS BELOW"
+                        "SETUP NEEDED · TAP TO ENABLE PERMISSIONS"
                     },
                     color = PaperBg,
                     fontSize = 11.sp,
@@ -860,7 +869,7 @@ private fun SetupChecklistCard(
             stepColor = AccentTeal,
             title = "Global Push-to-Talk Service",
             subtitle = if (isAccessibilityConnected) {
-                "Active (${triggerMode.title})"
+                "Active (${triggerMode.title} + Accessibility Shortcut)"
             } else {
                 "Enable SayItFlow in Accessibility Settings"
             },
@@ -898,7 +907,11 @@ private fun ChecklistRow(
     onAction: () -> Unit
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .clickable { onAction() }
+            .padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -1741,23 +1754,28 @@ private fun HardwareTriggerSettingsCard(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .clickable { onOpenAccessibilitySettings() }
+                .padding(vertical = 2.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Hardware Push-to-Talk",
+                    text = "Hardware & Accessibility Trigger",
                     color = Ink,
                     fontSize = 15.5.sp,
                     fontWeight = FontWeight.ExtraBold
                 )
                 Text(
-                    text = "Hold physical volume button in any app to dictate",
+                    text = "Hold physical Volume button or tap the Android Accessibility button in any app",
                     color = InkSoft,
                     fontSize = 12.sp
                 )
             }
+            Spacer(modifier = Modifier.width(8.dp))
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(999.dp))

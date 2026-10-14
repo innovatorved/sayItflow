@@ -1,6 +1,8 @@
 package com.sayitflow.android.service
 
+import android.accessibilityservice.AccessibilityButtonController
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -11,6 +13,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.VibrationEffect
 import android.os.Vibrator
+import android.util.Log
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
@@ -27,7 +30,8 @@ import kotlinx.coroutines.withContext
 /**
  * System-wide Accessibility Service for Android:
  * 1. Intercepts hardware Volume button holds (`Volume Down`, `Volume Up`, or `Volume Up + Down` chord)
- * 2. Keeps Whisper-Tiny INT8 ONNX warm in RAM on service connection and button press
+ *    AND the floating Android Accessibility Button (`AccessibilityButtonCallback`)
+ * 2. Loads Whisper-Tiny INT8 ONNX on demand when dictation is triggered (0 MB idle RAM)
  * 3. Captures 16 kHz mono PCM with zero-loss circular pre-roll & displays waveform pill
  * 4. Transcribes with bundled 100% on-device Whisper-Tiny INT8 Live Turbo (or Google SODA + Whisper Hybrid)
  * 5. Injects text directly into the active text input without switching away from Gboard!
@@ -49,12 +53,48 @@ class SayItFlowAccessibilityService : AccessibilityService() {
     private var holdRunnable: Runnable? = null
     private var currentForegroundPackage: String = ""
 
+    private val accessibilityButtonCallback =
+        object : AccessibilityButtonController.AccessibilityButtonCallback() {
+            override fun onClicked(controller: AccessibilityButtonController?) {
+                Log.i("SayItFlowService", "Accessibility Button clicked — toggling dictation")
+                toggleDictationFromAccessibilityButton()
+            }
+
+            override fun onAvailabilityChanged(
+                controller: AccessibilityButtonController?,
+                available: Boolean
+            ) {
+                Log.i("SayItFlowService", "Accessibility Button availability=$available")
+            }
+        }
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         coordinator = SayItFlowCoordinator.getInstance(this)
-        overlayPill = OverlayPillController(this)
+        overlayPill = OverlayPillController(this) {
+            if (isDictationActive()) {
+                holdTriggered = false
+                finishDictationSession(ignoreShortTap = false)
+            }
+        }
         coordinator.setAccessibilityConnected(true)
         coordinator.senseVoiceEngine.prepareAssetsOnDiskAsync()
+
+        // Ensure FLAG_REQUEST_ACCESSIBILITY_BUTTON is active at runtime even across APK upgrades
+        try {
+            serviceInfo = serviceInfo?.apply {
+                flags = flags or
+                    AccessibilityServiceInfo.FLAG_REQUEST_ACCESSIBILITY_BUTTON or
+                    AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS or
+                    AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+            }
+            accessibilityButtonController.registerAccessibilityButtonCallback(
+                accessibilityButtonCallback,
+                mainHandler
+            )
+        } catch (e: Exception) {
+            Log.w("SayItFlowService", "Failed to register AccessibilityButtonCallback", e)
+        }
 
         waveformCollectorJob = serviceScope.launch {
             coordinator.audioCapture.waveformLevels.collect { levels ->
@@ -69,6 +109,27 @@ class SayItFlowAccessibilityService : AccessibilityService() {
                     overlayPill.updateWaveform(levels)
                 }
             }
+        }
+    }
+
+    private fun isDictationActive(): Boolean {
+        return holdTriggered ||
+            activeSessionStreaming ||
+            (::coordinator.isInitialized &&
+                (coordinator.audioCapture.isRecording.value ||
+                    coordinator.fastStreamingEngine.isListening.value))
+    }
+
+    private fun toggleDictationFromAccessibilityButton() {
+        holdRunnable?.let { mainHandler.removeCallbacks(it) }
+        holdRunnable = null
+        if (isDictationActive()) {
+            holdTriggered = false
+            finishDictationSession(ignoreShortTap = false)
+        } else {
+            holdTriggered = true
+            coordinator.senseVoiceEngine.warmUpAsync()
+            startDictationSession()
         }
     }
 
@@ -87,6 +148,12 @@ class SayItFlowAccessibilityService : AccessibilityService() {
     }
 
     override fun onDestroy() {
+        try {
+            accessibilityButtonController.unregisterAccessibilityButtonCallback(
+                accessibilityButtonCallback
+            )
+        } catch (_: Exception) {
+        }
         if (::coordinator.isInitialized) {
             coordinator.setAccessibilityConnected(false)
         }
