@@ -252,17 +252,6 @@ fun DashboardScreen(
         }
     }
 
-    // Stream live partial words into the Studio scratchpad while speaking!
-    LaunchedEffect(liveStreamTranscript, isStreamListening) {
-        if (isStreamListening && liveStreamTranscript.isNotBlank()) {
-            scratchpadText = if (baseScratchpadBeforeStream.isBlank()) {
-                liveStreamTranscript
-            } else {
-                "$baseScratchpadBeforeStream $liveStreamTranscript"
-            }
-        }
-    }
-
     // Track recording timer
     LaunchedEffect(isRecording) {
         if (isRecording) {
@@ -321,7 +310,7 @@ fun DashboardScreen(
                 scope.launch {
                     val t0 = System.currentTimeMillis()
                     try {
-                        val raw = coordinator.fastStreamingEngine.stopAndAwaitTranscript(maxWaitMs = 200L)
+                        val raw = coordinator.fastStreamingEngine.stopAndAwaitTranscript(maxWaitMs = 1800L)
                         if (raw.isBlank()) {
                             statusBannerText = "No speech detected — speak clearly near the microphone."
                         } else {

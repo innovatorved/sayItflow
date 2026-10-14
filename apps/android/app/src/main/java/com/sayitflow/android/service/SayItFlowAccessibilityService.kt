@@ -143,7 +143,12 @@ class SayItFlowAccessibilityService : AccessibilityService() {
             KeyEvent.ACTION_DOWN -> {
                 if (event.repeatCount == 0) {
                     holdTriggered = false
-                    if (coordinator.asrEngineMode.value == SayItFlowCoordinator.AsrEngineMode.VOZ_OFFLINE &&
+                    if (coordinator.asrEngineMode.value == SayItFlowCoordinator.AsrEngineMode.INSTANT_STREAMING &&
+                        coordinator.fastStreamingEngine.isAvailable()
+                    ) {
+                        // Start pre-roll microphone capture at millisecond 0 so speech during the hold delay is never cut off
+                        coordinator.fastStreamingEngine.startPreRollOnKeyDown()
+                    } else if (coordinator.asrEngineMode.value == SayItFlowCoordinator.AsrEngineMode.VOZ_OFFLINE &&
                         coordinator.vozEngine.areModelFilesInstalled()
                     ) {
                         coordinator.vozEngine.warmUpAsync()
@@ -164,7 +169,8 @@ class SayItFlowAccessibilityService : AccessibilityService() {
                     holdTriggered = false
                     finishDictationSession()
                 } else {
-                    // Short tap (< threshold): forward normal volume adjustment
+                    // Short tap (< threshold): discard pre-roll and forward normal volume adjustment
+                    coordinator.fastStreamingEngine.discardPreRoll()
                     val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
                     audioManager.adjustStreamVolume(
                         AudioManager.STREAM_MUSIC,
@@ -253,7 +259,7 @@ class SayItFlowAccessibilityService : AccessibilityService() {
             serviceScope.launch {
                 val t0 = System.currentTimeMillis()
                 try {
-                    val rawText = coordinator.fastStreamingEngine.stopAndAwaitTranscript(maxWaitMs = 200L)
+                    val rawText = coordinator.fastStreamingEngine.stopAndAwaitTranscript(maxWaitMs = 1800L)
                     overlayPill.hide()
 
                     if (rawText.isBlank()) {
