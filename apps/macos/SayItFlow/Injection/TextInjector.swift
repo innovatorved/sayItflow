@@ -139,11 +139,25 @@ struct TextInjector {
         ) == .success, settable.boolValue else {
             return false
         }
-        return AXUIElementSetAttributeValue(
+        let beforeValue = readStringValue(element)
+        let beforeRange = readSelectedRange(element)
+
+        guard AXUIElementSetAttributeValue(
             element,
             kAXSelectedTextAttribute as CFString,
             text as CFTypeRef
-        ) == .success
+        ) == .success else {
+            return false
+        }
+
+        // Guard against Electron/WebView elements that return .success without mutating text
+        if let beforeValue, let afterValue = readStringValue(element) {
+            let afterRange = readSelectedRange(element)
+            if afterValue == beforeValue && afterRange?.location == beforeRange?.location {
+                return false
+            }
+        }
+        return true
     }
 
     private func insertIntoEmptyField(_ element: AXUIElement, text: String) -> Bool {
@@ -155,21 +169,50 @@ struct TextInjector {
         ) == .success, settable.boolValue else {
             return false
         }
+        guard let existing = readStringValue(element),
+              existing.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return false
+        }
+        guard AXUIElementSetAttributeValue(
+            element,
+            kAXValueAttribute as CFString,
+            text as CFTypeRef
+        ) == .success else {
+            return false
+        }
+        if let afterValue = readStringValue(element),
+           afterValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return false
+        }
+        return true
+    }
+
+    private func readStringValue(_ element: AXUIElement) -> String? {
         var valueRef: CFTypeRef?
         guard AXUIElementCopyAttributeValue(
             element,
             kAXValueAttribute as CFString,
             &valueRef
-        ) == .success else { return false }
-        let existing = (valueRef as? String) ?? ""
-        guard existing.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return false
-        }
-        return AXUIElementSetAttributeValue(
+        ) == .success else { return nil }
+        return valueRef as? String
+    }
+
+    private func readSelectedRange(_ element: AXUIElement) -> CFRange? {
+        var rangeRef: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(
             element,
-            kAXValueAttribute as CFString,
-            text as CFTypeRef
-        ) == .success
+            kAXSelectedTextRangeAttribute as CFString,
+            &rangeRef
+        ) == .success,
+        let rangeVal = rangeRef,
+        CFGetTypeID(rangeVal) == AXValueGetTypeID() else {
+            return nil
+        }
+        var cfRange = CFRange()
+        guard AXValueGetValue(unsafeBitCast(rangeVal, to: AXValue.self), .cfRange, &cfRange) else {
+            return nil
+        }
+        return cfRange
     }
 
     private func insertViaPaste(_ text: String, targetPID: pid_t?) -> Bool {

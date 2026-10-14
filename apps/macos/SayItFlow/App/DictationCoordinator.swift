@@ -240,7 +240,7 @@ final class DictationCoordinator {
                     } else {
                         var options = TextInjectionOptions()
                         options.pinnedPID = pinnedApp
-                        options.preferPaste = InjectionTargetPolicy.prefersPaste(bundleID: targetBundle)
+                        options.preferPaste = InjectionTargetPolicy.prefersPaste(bundleID: targetBundle, pid: pinnedApp)
                         do {
                             try TextInjector().inject(transcript, options: options)
                         } catch {
