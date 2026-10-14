@@ -148,19 +148,18 @@ class SayItFlowAccessibilityService : AccessibilityService() {
                 if (event.repeatCount == 0) {
                     holdTriggered = false
                     val asrMode = coordinator.asrEngineMode.value
-                    if (asrMode == SayItFlowCoordinator.AsrEngineMode.SENSE_VOICE_OFFLINE) {
-                        // Start 1.5s circular pre-roll on key down without dropping initial speech
-                        coordinator.audioCapture.startPreRoll()
-                        coordinator.senseVoiceEngine.warmUpAsync()
-                    } else if (asrMode == SayItFlowCoordinator.AsrEngineMode.INSTANT_STREAMING &&
+                    if (asrMode == SayItFlowCoordinator.AsrEngineMode.INSTANT_STREAMING &&
                         coordinator.fastStreamingEngine.isAvailable()
                     ) {
                         // Start pre-roll microphone capture at millisecond 0 so speech during the hold delay is never cut off
                         coordinator.fastStreamingEngine.startPreRollOnKeyDown()
-                    } else if (asrMode == SayItFlowCoordinator.AsrEngineMode.VOZ_OFFLINE) {
+                    } else {
+                        // Start 1.5s circular pre-roll on key down without dropping initial speech
                         coordinator.audioCapture.startPreRoll()
                         if (coordinator.vozEngine.areModelFilesInstalled()) {
                             coordinator.vozEngine.warmUpAsync()
+                        } else {
+                            coordinator.senseVoiceEngine.warmUpAsync()
                         }
                     }
                     val runnable = Runnable {
@@ -180,6 +179,7 @@ class SayItFlowAccessibilityService : AccessibilityService() {
                     finishDictationSession()
                 } else {
                     // Short tap (< threshold): discard pre-roll and forward normal volume adjustment
+                    coordinator.vozEngine.cancelLiveSession()
                     coordinator.audioCapture.discardPreRoll()
                     coordinator.fastStreamingEngine.discardPreRoll()
                     val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
@@ -202,13 +202,10 @@ class SayItFlowAccessibilityService : AccessibilityService() {
                 if (event.keyCode == KeyEvent.KEYCODE_VOLUME_UP) volUpPressed = true
                 if (volDownPressed && volUpPressed && !holdTriggered) {
                     holdTriggered = true
-                    val asrMode = coordinator.asrEngineMode.value
-                    if (asrMode == SayItFlowCoordinator.AsrEngineMode.SENSE_VOICE_OFFLINE) {
-                        coordinator.senseVoiceEngine.warmUpAsync()
-                    } else if (asrMode == SayItFlowCoordinator.AsrEngineMode.VOZ_OFFLINE &&
-                        coordinator.vozEngine.areModelFilesInstalled()
-                    ) {
+                    if (coordinator.vozEngine.areModelFilesInstalled()) {
                         coordinator.vozEngine.warmUpAsync()
+                    } else {
+                        coordinator.senseVoiceEngine.warmUpAsync()
                     }
                     startDictationSession()
                     return true
@@ -260,6 +257,9 @@ class SayItFlowAccessibilityService : AccessibilityService() {
         val started = if (promoted) true else coordinator.audioCapture.startRecording()
         if (started) {
             triggerHaptic(isStart = true)
+            if (coordinator.vozEngine.areModelFilesInstalled()) {
+                coordinator.vozEngine.startLiveSession(coordinator.audioCapture)
+            }
         } else {
             overlayPill.hide()
         }
@@ -321,19 +321,20 @@ class SayItFlowAccessibilityService : AccessibilityService() {
         }
 
         if (!coordinator.audioCapture.isRecording.value) {
+            coordinator.vozEngine.cancelLiveSession()
             coordinator.audioCapture.discardPreRoll()
             return
         }
 
         // Immediately trigger release haptic and show transcribing state on Main Looper
-        // Main Looper returns in <1ms without blocking on the 200ms post-release acoustic tail capture!
+        // Main Looper returns in <1ms without blocking on the post-release acoustic tail capture!
         triggerHaptic(isStart = false)
 
         val asrMode = coordinator.asrEngineMode.value
-        val isCold = if (asrMode == SayItFlowCoordinator.AsrEngineMode.SENSE_VOICE_OFFLINE) {
-            !coordinator.senseVoiceEngine.isLoaded.value
-        } else {
+        val isCold = if (coordinator.vozEngine.areModelFilesInstalled()) {
             !coordinator.vozEngine.isLoaded.value
+        } else {
+            !coordinator.senseVoiceEngine.isLoaded.value
         }
         overlayPill.showTranscribing(isColdWarmUp = isCold)
         val targetPkg = currentForegroundPackage
@@ -347,6 +348,7 @@ class SayItFlowAccessibilityService : AccessibilityService() {
 
                 // Ignore ultra-short accidental releases (< 200 ms after hold threshold)
                 if ((ignoreShortTap && rawMs < 200L) || samples.size < 1600) {
+                    coordinator.vozEngine.cancelLiveSession()
                     withContext(Dispatchers.Main) {
                         overlayPill.hide()
                     }
@@ -354,7 +356,9 @@ class SayItFlowAccessibilityService : AccessibilityService() {
                 }
 
                 val selectedLang = coordinator.selectedLanguage.value
-                val rawTranscribed: String = if (asrMode == SayItFlowCoordinator.AsrEngineMode.SENSE_VOICE_OFFLINE) {
+                val rawTranscribed: String = if (coordinator.vozEngine.areModelFilesInstalled()) {
+                    coordinator.vozEngine.finishLiveSession(samples, coordinator.audioCapture)
+                } else if (asrMode == SayItFlowCoordinator.AsrEngineMode.SENSE_VOICE_OFFLINE) {
                     coordinator.senseVoiceEngine.transcribe(samples, language = selectedLang).text
                 } else {
                     coordinator.vozEngine.transcribe(samples)
@@ -415,6 +419,7 @@ class SayItFlowAccessibilityService : AccessibilityService() {
         holdTriggered = false
         activeSessionStreaming = false
         if (::coordinator.isInitialized) {
+            coordinator.vozEngine.cancelLiveSession()
             coordinator.audioCapture.discardPreRoll()
             if (coordinator.audioCapture.isRecording.value) {
                 coordinator.audioCapture.stopRecording()

@@ -361,32 +361,38 @@ fun DashboardScreen(
         if (!isBatchRecording) {
             statusBannerText = null
             val started = coordinator.audioCapture.startRecording()
-            if (!started) {
+            if (started) {
+                if (coordinator.vozEngine.areModelFilesInstalled()) {
+                    coordinator.vozEngine.startLiveSession(coordinator.audioCapture)
+                }
+            } else {
                 statusBannerText = "Could not open microphone. Check permission."
             }
         } else {
             val samples = coordinator.audioCapture.stopRecording()
             val rawMs = coordinator.audioCapture.lastRawDurationMs
             if (rawMs < 200L) {
+                coordinator.vozEngine.cancelLiveSession()
                 statusBannerText = "Recording too short — speak clearly near the microphone."
                 return
             }
             if (samples.size < 1600) {
+                coordinator.vozEngine.cancelLiveSession()
                 statusBannerText = "No speech detected — speak clearly near the microphone."
                 return
             }
             isInAppTranscribing = true
-            statusBannerText = if (asrEngineMode == SayItFlowCoordinator.AsrEngineMode.SENSE_VOICE_OFFLINE) {
-                "Transcribing on-device..."
-            } else if (isVozLoaded) {
-                "Transcribing with Voz-0.6B..."
+            statusBannerText = if (isVozLoaded) {
+                "Finalizing Voz-0.6B Live Turbo..."
             } else {
                 "Warming Voz-0.6B in RAM & transcribing..."
             }
             scope.launch {
                 val t0 = System.currentTimeMillis()
                 try {
-                    val raw = if (asrEngineMode == SayItFlowCoordinator.AsrEngineMode.SENSE_VOICE_OFFLINE) {
+                    val raw = if (coordinator.vozEngine.areModelFilesInstalled()) {
+                        coordinator.vozEngine.finishLiveSession(samples, coordinator.audioCapture)
+                    } else if (asrEngineMode == SayItFlowCoordinator.AsrEngineMode.SENSE_VOICE_OFFLINE) {
                         coordinator.senseVoiceEngine.transcribe(samples, language = selectedLanguage).text
                     } else {
                         coordinator.vozEngine.transcribe(samples)
@@ -2093,7 +2099,9 @@ private fun ModelManagementCard(
             fontWeight = FontWeight.ExtraBold
         )
 
-        SayItFlowCoordinator.AsrEngineMode.entries.forEach { mode ->
+        SayItFlowCoordinator.AsrEngineMode.entries
+            .filter { it != SayItFlowCoordinator.AsrEngineMode.SENSE_VOICE_OFFLINE }
+            .forEach { mode ->
             val selected = mode == asrEngineMode
             Row(
                 modifier = Modifier

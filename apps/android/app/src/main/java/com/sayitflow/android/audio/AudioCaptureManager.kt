@@ -307,6 +307,112 @@ class AudioCaptureManager {
     }
 
     /**
+     * Returns the current raw sample count in `sampleBuffer` while recording is active.
+     */
+    fun getActiveRawSampleCount(): Int {
+        synchronized(lock) {
+            return recordedSampleCount.coerceIn(0, MAX_SAMPLES)
+        }
+    }
+
+    /**
+     * Returns `(rawEndSampleIndex, normalizedSamples)` from `fromSample` up to current `recordedSampleCount`
+     * without stopping recording or altering indices, so `VozEngine` can pre-transcribe while the user holds the button.
+     */
+    fun getActiveSamplesSnapshot(fromSample: Int = 0): Pair<Int, FloatArray> {
+        val rawSlice: FloatArray
+        val endSample: Int
+        synchronized(lock) {
+            endSample = recordedSampleCount.coerceIn(0, MAX_SAMPLES)
+            val start = fromSample.coerceIn(0, endSample)
+            if (endSample - start <= 0) {
+                return endSample to FloatArray(0)
+            }
+            rawSlice = sampleBuffer.copyOfRange(start, endSample)
+        }
+        return endSample to normalizeSlicePreserveTiming(rawSlice)
+    }
+
+    /**
+     * Checks whether any speech energy occurred in `sampleBuffer` after `sampleIndex`.
+     * Used on button release (`ACTION_UP`) to reuse an already-computed or in-flight speculative pass
+     * if the user only had trailing silence before lifting their finger.
+     */
+    fun hasSpeechAfter(sampleIndex: Int): Boolean {
+        synchronized(lock) {
+            val end = recordedSampleCount.coerceIn(0, MAX_SAMPLES)
+            val start = sampleIndex.coerceIn(0, end)
+            val count = end - start
+            if (count < 480) return false // < 30ms cannot contain a new syllable
+            var sum = 0.0
+            for (i in start until end) sum += sampleBuffer[i]
+            val dc = (sum / count).toFloat()
+
+            var peak = 0f
+            var sumSq = 0.0
+            var activeSamples = 0
+            for (i in start until end) {
+                val v = abs(sampleBuffer[i] - dc)
+                if (v > peak) peak = v
+                if (v > 0.038f) activeSamples++
+                sumSq += v * v
+            }
+            val rms = sqrt(sumSq / count).toFloat()
+            // Require meaningful speech energy (at least 25ms of activevoiced frames)
+            return peak > 0.048f && rms > 0.015f && activeSamples >= 400
+        }
+    }
+
+    /**
+     * Checks whether the tail of the active buffer (last `windowSamples`) is currently quiet
+     * (i.e. the user just paused at the end of a phrase while holding the button).
+     */
+    fun isRecentTailQuiet(windowSamples: Int = 1920): Boolean {
+        synchronized(lock) {
+            val end = recordedSampleCount.coerceIn(0, MAX_SAMPLES)
+            if (end < windowSamples) return false
+            val start = end - windowSamples
+            var sumSq = 0.0
+            var peak = 0f
+            for (i in start until end) {
+                val a = abs(sampleBuffer[i])
+                if (a > peak) peak = a
+                sumSq += a * a
+            }
+            val rms = sqrt(sumSq / windowSamples).toFloat()
+            return peak < 0.042f && rms < 0.014f
+        }
+    }
+
+    private fun normalizeSlicePreserveTiming(samples: FloatArray): FloatArray {
+        if (samples.isEmpty()) return samples
+        var mean = 0.0
+        for (s in samples) mean += s
+        mean /= samples.size
+        val dc = mean.toFloat()
+
+        var peak = 0f
+        val out = FloatArray(samples.size)
+        for (i in samples.indices) {
+            val v = (samples[i] - dc).coerceIn(-1.0f, 1.0f)
+            out[i] = v
+            val a = abs(v)
+            if (a > peak) peak = a
+        }
+        val gain = if (peak > 0.0001f && peak < 0.70f) {
+            (0.78f / peak).coerceIn(1.0f, 8.0f)
+        } else {
+            1.0f
+        }
+        if (gain > 1.0f) {
+            for (i in out.indices) {
+                out[i] = (out[i] * gain).coerceIn(-1.0f, 1.0f)
+            }
+        }
+        return out
+    }
+
+    /**
      * Non-blocking asynchronous stopRecording entry point.
      * Captures post-release acoustic tail on Dispatchers.IO so Main Looper is never blocked.
      */
@@ -315,9 +421,10 @@ class AudioCaptureManager {
     }
 
     /**
-     * Phase 3: Stops recording with 200ms post-release tail capture on `ACTION_UP`.
-     * Continues capturing for 200ms (3,200 samples) before stopping `AudioRecord` to preserve
-     * final syllables. Returns normalized float32 samples.
+     * Phase 3: Stops recording with adaptive post-release tail capture on `ACTION_UP`.
+     * - If the last 100ms before `ACTION_UP` are already quiet (user finished speaking before releasing),
+     *   captures only 40ms (640 samples) of tail, saving 160ms of latency.
+     * - Otherwise captures 100ms (1,600 samples) to preserve final consonants.
      */
     fun stopRecording(): FloatArray {
         synchronized(lock) {
@@ -327,13 +434,25 @@ class AudioCaptureManager {
             captureState.set(CaptureState.STOPPING)
             _isRecording.value = false
 
-            // Capture 200ms post-release acoustic tail
+            // Check if the last 100ms (1,600 samples) before button release are already quiet
+            var recentPeak = 0f
+            val checkStart = max(0, recordedSampleCount - 1600)
+            for (i in checkStart until recordedSampleCount) {
+                val a = abs(sampleBuffer[i])
+                if (a > recentPeak) recentPeak = a
+            }
+            val targetTailSamples = if (recordedSampleCount >= 1600 && recentPeak < 0.038f) {
+                640 // 40ms fast tail when user already paused before releasing
+            } else {
+                1600 // 100ms tail when user released immediately at end of word
+            }
+
             val recorder = audioRecord
             if (recorder != null && recorder.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
-                val tailShorts = ShortArray(800)
+                val tailShorts = ShortArray(640)
                 var tailCaptured = 0
-                while (tailCaptured < TAIL_CAPTURE_SAMPLES && recordedSampleCount < MAX_SAMPLES) {
-                    val toRead = min(tailShorts.size, TAIL_CAPTURE_SAMPLES - tailCaptured)
+                while (tailCaptured < targetTailSamples && recordedSampleCount < MAX_SAMPLES) {
+                    val toRead = min(tailShorts.size, targetTailSamples - tailCaptured)
                     val read = recorder.read(tailShorts, 0, toRead)
                     if (read <= 0) break
                     for (i in 0 until read) {

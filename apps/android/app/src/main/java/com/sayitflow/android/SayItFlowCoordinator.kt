@@ -19,23 +19,23 @@ import kotlinx.coroutines.flow.asStateFlow
 class SayItFlowCoordinator private constructor(context: Context) {
 
     enum class AsrEngineMode(val id: String, val title: String, val subtitle: String, val badge: String) {
-        SENSE_VOICE_OFFLINE(
-            "sense_voice_offline",
-            "SenseVoice On-Device (Recommended)",
-            "100% on-device offline non-autoregressive neural model — instant on CPU across all phones",
-            "OFFLINE"
+        VOZ_OFFLINE(
+            "voz_offline",
+            "Voz-0.6B Live Turbo (Recommended)",
+            "100% on-device 600M FastConformer-TDT — encodes live while holding for instant release",
+            "LIVE TURBO"
         ),
         INSTANT_STREAMING(
             "instant_streaming",
             "Google SODA Streaming",
-            "Streams speech live via Android SpeechRecognizer (Pixel Tensor only)",
-            "~120ms"
+            "Streams speech live via Android SpeechRecognizer (when supported by device)",
+            "SYSTEM"
         ),
-        VOZ_OFFLINE(
-            "voz_offline",
-            "Voz-0.6B Offline ONNX",
-            "600M-param FastConformer-TDT (384 MB) — batch offline decoding (~3–4s)",
-            "384MB"
+        SENSE_VOICE_OFFLINE(
+            "sense_voice_offline",
+            "Legacy Offline Fallback",
+            "Legacy fallback engine (delegates to Voz-0.6B Live Turbo when installed)",
+            "LEGACY"
         )
     }
 
@@ -154,32 +154,39 @@ class SayItFlowCoordinator private constructor(context: Context) {
     val audioCapture = AudioCaptureManager()
 
     private val _asrEngineMode = MutableStateFlow(
-        AsrEngineMode.entries.find {
-            it.id == prefs.getString("asr_engine_mode", AsrEngineMode.SENSE_VOICE_OFFLINE.id)
-        } ?: AsrEngineMode.SENSE_VOICE_OFFLINE
+        run {
+            val migrated = prefs.getBoolean("migrated_to_voz_live_turbo", false)
+            val savedId = prefs.getString("asr_engine_mode", AsrEngineMode.VOZ_OFFLINE.id)
+            if (!migrated || savedId == null || savedId == AsrEngineMode.SENSE_VOICE_OFFLINE.id) {
+                prefs.edit()
+                    .putString("asr_engine_mode", AsrEngineMode.VOZ_OFFLINE.id)
+                    .putBoolean("migrated_to_voz_live_turbo", true)
+                    .apply()
+                AsrEngineMode.VOZ_OFFLINE
+            } else {
+                AsrEngineMode.entries.find { it.id == savedId } ?: AsrEngineMode.VOZ_OFFLINE
+            }
+        }
     )
     val asrEngineMode: StateFlow<AsrEngineMode> = _asrEngineMode.asStateFlow()
 
     init {
         senseVoiceEngine.vozEngineDelegate = vozEngine
         senseVoiceEngine.fastStreamingDelegate = fastStreamingEngine
-        senseVoiceEngine.warmUpAsync()
-        if (_asrEngineMode.value == AsrEngineMode.VOZ_OFFLINE && vozEngine.areModelFilesInstalled()) {
+        if (vozEngine.areModelFilesInstalled()) {
             vozEngine.warmUpAsync()
+        } else {
+            senseVoiceEngine.warmUpAsync()
         }
     }
 
     /**
-     * Returns true when live Hold-to-Talk should use the zero-loss continuous pipe (`FastStreamingAsrEngine`).
-     * Both `SENSE_VOICE_OFFLINE` (when standalone 230MB ONNX file isn't sideloaded) and `INSTANT_STREAMING`
-     * use the zero-loss lock-free audio queue + multi-segment continuation + PCM replay engine.
+     * Returns true only when the user explicitly selects `INSTANT_STREAMING` (Google SODA).
+     * Default `VOZ_OFFLINE` uses 100% on-device `Voz-0.6B Live Turbo` with while-holding pre-transcription.
      */
     fun shouldUseZeroLossStreamingPipe(): Boolean {
         val mode = _asrEngineMode.value
         if (mode == AsrEngineMode.INSTANT_STREAMING) {
-            return fastStreamingEngine.isAvailable()
-        }
-        if (mode == AsrEngineMode.SENSE_VOICE_OFFLINE && !senseVoiceEngine.hasStandaloneOnnxModel()) {
             return fastStreamingEngine.isAvailable()
         }
         return false

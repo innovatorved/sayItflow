@@ -13,8 +13,8 @@ android {
         applicationId = "com.sayitflow.android"
         minSdk = 28
         targetSdk = 35
-        versionCode = 150
-        versionName = "1.5.0"
+        versionCode = 170
+        versionName = "1.7.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {

@@ -6,14 +6,17 @@ import ai.onnxruntime.OrtSession
 import android.content.Context
 import android.os.Process
 import android.util.Log
+import com.sayitflow.android.audio.AudioCaptureManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -28,14 +31,16 @@ import kotlin.math.min
 import kotlin.math.pow
 
 /**
- * 100% On-Device `desert-ant-labs/voz` Speech-to-Text Engine for Android (Google Pixel Tensor).
+ * 100% On-Device `desert-ant-labs/voz` Speech-to-Text Engine for Android ("Voz-0.6B Live Turbo").
  *
- * Ports `Desert-Ant-Labs/desert-ant-core/Sources/Voz/Pipeline.swift` directly to Kotlin + ONNX Runtime:
+ * Ports both `Pipeline.swift` and `Live.swift` from `Desert-Ant-Labs/desert-ant-core` to Kotlin + ONNX Runtime:
  * - Uses `web/encoder.onnx` + `web/encoder.onnx.data` (FP16 weights, fused mel frontend)
  * - Uses `web/decoder.onnx` (`reducesInGraph = true`, outputs `tok`, `dur`, `h_out`, `c_out`)
  * - Uses `web/embedding.f16` (`[8193, 640]` widened once to float32 on load)
- * - Uses zero-copy Direct `FloatBuffer`s, `NO_OPT` (avoiding slow naive `Gemm`), 4 big-core threads,
- *   and `THREAD_PRIORITY_URGENT_DISPLAY` scheduling for maximum speed on Pixel Tensor G2.
+ * - Separate `encoderOptions` (`NO_OPT`, 4 big-core threads, CPU arena + memory pattern enabled) and
+ *   `decoderOptions` (`ALL_OPT`, 1 thread for zero barrier overhead on `[1, 640, 1, 1]` LSTM steps).
+ * - While-holding speculative pre-transcription (`Live.swift` algorithm): encodes & commits speech while
+ *   the user is holding the button so releasing the button returns almost immediately.
  */
 class VozEngine(private val context: Context) {
 
@@ -43,6 +48,8 @@ class VozEngine(private val context: Context) {
         private const val TAG = "VozEngine"
         const val IDLE_UNLOAD_DELAY_MS = 1_800_000L // Keep warm in RAM for 30 minutes of inactivity
         const val KEY_BIAS_MASK = -40000.0f // Float16-representable -infinity
+        private const val LIVE_COMMIT_AFTER_SEC = 10.0 // Commit old words once uncommitted audio > 10s
+        private const val LIVE_HOLDBACK_SEC = 3.0 // Keep last 3s uncommitted for right-context
 
         private fun allocateDirectFloatBuffer(floatCount: Int): FloatBuffer {
             return ByteBuffer.allocateDirect(floatCount * 4)
@@ -114,11 +121,43 @@ class VozEngine(private val context: Context) {
                 keyBias = keyBias
             )
         }
+
+        /**
+         * Ports `Live.swift:agreedPrefix` — returns how many leading words two consecutive passes agree on
+         * within 0.25s timestamp tolerance.
+         */
+        fun agreedPrefixCount(
+            previous: List<VozWords.TimedWord>,
+            current: List<VozWords.TimedWord>
+        ): Int {
+            val count = min(previous.size, current.size)
+            for (i in 0 until count) {
+                val a = previous[i]
+                val b = current[i]
+                if (a.text != b.text || abs(a.start - b.start) > 0.25 || abs(a.end - b.end) > 0.25) {
+                    return i
+                }
+            }
+            return count
+        }
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val engineMutex = Mutex()
     private var idleUnloadJob: Job? = null
+
+    // Live while-holding pre-transcription state (`Live.swift` pattern)
+    private var liveJob: Job? = null
+    @Volatile
+    private var liveBaseSampleOffset: Int = 0
+    @Volatile
+    private var liveCommittedWords: List<VozWords.TimedWord> = emptyList()
+    @Volatile
+    private var livePrevPassWords: List<VozWords.TimedWord> = emptyList()
+    @Volatile
+    private var liveLastDecodedSampleEnd: Int = 0
+    @Volatile
+    private var liveLastDecodedWords: List<VozWords.TimedWord> = emptyList()
 
     private var ortEnv: OrtEnvironment? = null
     private var encoderSession: OrtSession? = null
@@ -195,24 +234,39 @@ class VozEngine(private val context: Context) {
                 val embTable = VozWords.decodeFloat16Embedding(embBytes, expectedElements)
 
                 val env = OrtEnvironment.getEnvironment()
-                val sessionOptions = OrtSession.SessionOptions().apply {
-                    // Desert Ant Labs (`voz.js`): graphOptimizationLevel: "disabled" (NO_OPT) is deliberate
-                    // because ONNX Runtime's MatMul+Add->Gemm fusion emits a naive kernel on this encoder.
+
+                // 1. Encoder SessionOptions:
+                // - NO_OPT avoids ONNX Runtime's slow naive Gemm fusion on FastConformer
+                // - 4 intra-op threads use the 4 big cores (2x X1 + 2x A78 on Tensor G2)
+                // - CPUArenaAllocator + MemoryPatternOptimization pre-allocate intermediate layer buffers once
+                val encoderOptions = OrtSession.SessionOptions().apply {
                     setOptimizationLevel(OrtSession.SessionOptions.OptLevel.NO_OPT)
-                    // Pixel 7a (Tensor G2) has 4 performance cores (2x Cortex-X1 + 2x Cortex-A78).
-                    // Using 4 intra-op threads keeps execution off the 4 slow in-order Cortex-A55 cores.
                     setIntraOpNumThreads(4)
                     setInterOpNumThreads(1)
-                    // Avoid 350 MB duplicate CPU arena allocation so Android does not swap process to ZRAM.
-                    setCPUArenaAllocator(false)
-                    setMemoryPatternOptimization(false)
+                    setCPUArenaAllocator(true)
+                    setMemoryPatternOptimization(true)
                     runCatching {
                         addConfigEntry("session.intra_op.allow_spinning", "1")
+                        addConfigEntry("session.set_denormal_as_zero", "1")
                     }
                 }
 
-                val encSession = env.createSession(File(dir, "encoder.onnx").absolutePath, sessionOptions)
-                val decSession = env.createSession(File(dir, "decoder.onnx").absolutePath, sessionOptions)
+                // 2. Decoder SessionOptions:
+                // - ALL_OPT optimizes the 2-layer LSTM + Joint projection graph
+                // - 1 intra-op thread eliminates multi-thread barrier overhead across 45+ tiny [1, 640, 1, 1] steps!
+                val decoderOptions = OrtSession.SessionOptions().apply {
+                    setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
+                    setIntraOpNumThreads(1)
+                    setInterOpNumThreads(1)
+                    setCPUArenaAllocator(true)
+                    setMemoryPatternOptimization(true)
+                    runCatching {
+                        addConfigEntry("session.set_denormal_as_zero", "1")
+                    }
+                }
+
+                val encSession = env.createSession(File(dir, "encoder.onnx").absolutePath, encoderOptions)
+                val decSession = env.createSession(File(dir, "decoder.onnx").absolutePath, decoderOptions)
 
                 directAudioRows = allocateDirectFloatBuffer(config.hopLength * config.nRows)
                 directMelMask = allocateDirectFloatBuffer(config.validFrames)
@@ -226,8 +280,9 @@ class VozEngine(private val context: Context) {
                 vocabulary = vocab
                 embeddingTable = embTable
 
-                // Warm up decoder threadpool & JNI buffers with a 1-frame pass
+                // Warm up both encoder & decoder memory arenas so the very first user utterance has 0 arena allocation overhead
                 runCatching {
+                    runEncoderWindow(env, encSession, FloatArray(1600), config)
                     runDecoderWindow(env, decSession, reusableEncProj, 1, config)
                 }
 
@@ -277,6 +332,200 @@ class VozEngine(private val context: Context) {
     }
 
     /**
+     * Starts `Live.swift`-style while-holding speculative pre-transcription while the user holds the button.
+     * - Commits and trims agreed words on long utterances (>10s) so release only decodes the tail.
+     * - Immediately runs a speculative pass when the user pauses at the end of their sentence before lifting
+     *   their finger, so `finishLiveSession` can return in 0ms–300ms on `ACTION_UP`!
+     */
+    fun startLiveSession(audioCapture: AudioCaptureManager) {
+        if (!areModelFilesInstalled()) return
+        liveJob?.cancel()
+        liveBaseSampleOffset = 0
+        liveCommittedWords = emptyList()
+        livePrevPassWords = emptyList()
+        liveLastDecodedSampleEnd = 0
+        liveLastDecodedWords = emptyList()
+
+        liveJob = scope.launch {
+            runCatching { ensureLoaded() }
+            while (isActive && audioCapture.isRecording.value) {
+                delay(80L)
+                if (!audioCapture.isRecording.value) break
+
+                val rawEnd = audioCapture.getActiveRawSampleCount()
+                val baseOffset = liveBaseSampleOffset
+                val uncommittedSamples = rawEnd - baseOffset
+                val newSamplesSinceLastPass = rawEnd - liveLastDecodedSampleEnd
+
+                // Trigger A: User spoke >= 0.55s and just paused for >= 100ms (likely about to release button!)
+                val pauseTriggered = uncommittedSamples >= 8800 &&
+                    newSamplesSinceLastPass >= 3200 &&
+                    audioCapture.isRecentTailQuiet(1600)
+
+                // Trigger B: User is speaking continuously and has accumulated >= 2.2s of new uncommitted speech
+                val streamTriggered = uncommittedSamples >= 35200 &&
+                    newSamplesSinceLastPass >= 28800
+
+                if (pauseTriggered || streamTriggered) {
+                    val (snapEnd, slice) = audioCapture.getActiveSamplesSnapshot(baseOffset)
+                    if (slice.size >= 6400 && audioCapture.isRecording.value) {
+                        runCatching {
+                            val passWords = engineMutex.withLock {
+                                resetIdleUnloadTimerLocked()
+                                decodeWordsLocked(
+                                    samples = slice,
+                                    baseTimeOffsetSec = baseOffset.toDouble() / configuration.sampleRate.toDouble()
+                                )
+                            }
+                            liveLastDecodedSampleEnd = snapEnd
+                            liveLastDecodedWords = combineCommittedAndActive(liveCommittedWords, passWords)
+
+                            // Live.swift commit & trim logic for long continuous hold-to-talk
+                            val c = configuration
+                            val sliceDurationSec = slice.size.toDouble() / c.sampleRate.toDouble()
+                            val agreed = agreedPrefixCount(livePrevPassWords, passWords)
+                            var commitCount = if (agreed > 1) agreed - 1 else 0
+
+                            if (sliceDurationSec > LIVE_COMMIT_AFTER_SEC) {
+                                val cutoffSec = (snapEnd.toDouble() / c.sampleRate.toDouble()) - LIVE_HOLDBACK_SEC
+                                val oldCount = passWords.takeWhile { it.end <= cutoffSec }.size
+                                if (oldCount > commitCount) {
+                                    commitCount = oldCount
+                                }
+                            }
+
+                            if (commitCount > 0 && commitCount <= passWords.size) {
+                                val newlyCommitted = passWords.subList(0, commitCount)
+                                val lastWordEndSec = newlyCommitted.last().end
+                                val nominalSampleInSlice = ((lastWordEndSec * c.sampleRate) - baseOffset).toInt()
+                                    .coerceIn(0, slice.size)
+                                val cutInSlice = quietestPoint(
+                                    samples = slice,
+                                    at = nominalSampleInSlice,
+                                    lowest = c.sampleRate / 2,
+                                    limit = slice.size,
+                                    sampleRate = c.sampleRate
+                                )
+                                if (cutInSlice > c.sampleRate / 2) {
+                                    liveCommittedWords = combineCommittedAndActive(liveCommittedWords, newlyCommitted)
+                                    liveBaseSampleOffset = baseOffset + cutInSlice
+                                    val newBaseSec = liveBaseSampleOffset.toDouble() / c.sampleRate.toDouble()
+                                    livePrevPassWords = passWords.drop(commitCount).filter { it.end > newBaseSec }
+                                    Log.i(
+                                        TAG,
+                                        "Live.swift committed $commitCount words (${liveCommittedWords.size} total), " +
+                                            "advanced baseOffset to ${liveBaseSampleOffset / 16000.0}s"
+                                    )
+                                } else {
+                                    livePrevPassWords = passWords
+                                }
+                            } else {
+                                livePrevPassWords = passWords
+                            }
+                        }.onFailure { e ->
+                            Log.w(TAG, "Live pre-transcribe pass aborted: ${e.message}")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Cancels any active while-holding live session (e.g., on short tap or interrupt).
+     */
+    fun cancelLiveSession() {
+        liveJob?.cancel()
+        liveJob = null
+        liveBaseSampleOffset = 0
+        liveCommittedWords = emptyList()
+        livePrevPassWords = emptyList()
+        liveLastDecodedSampleEnd = 0
+        liveLastDecodedWords = emptyList()
+    }
+
+    /**
+     * Finalizes transcription on button release (`ACTION_UP`):
+     * 1. Waits for any in-flight speculative pass to complete.
+     * 2. If the speculative pass already covered all speech up to `ACTION_UP` (no new speech energy after
+     *    `liveLastDecodedSampleEnd`), returns the pre-computed transcript in 0ms!
+     * 3. If earlier segments were committed during long speech (`liveBaseSampleOffset > 0`), only decodes
+     *    the uncommitted tail and splices it with `liveCommittedWords`.
+     * 4. Otherwise decodes `finalSamples` directly.
+     */
+    suspend fun finishLiveSession(
+        finalSamples: FloatArray,
+        audioCapture: AudioCaptureManager
+    ): String {
+        val tRelease0 = System.currentTimeMillis()
+        val activeJob = liveJob
+        liveJob = null
+        if (activeJob != null && activeJob.isActive) {
+            // Allow an in-flight pass inside engineMutex to finish so we can reuse its result!
+            runCatching { activeJob.cancelAndJoin() }
+        }
+
+        // Case 1: Did the while-holding speculative pass already decode all speech before button release?
+        val decodedEnd = liveLastDecodedSampleEnd
+        val cachedWords = liveLastDecodedWords
+        if (decodedEnd > 0 && cachedWords.isNotEmpty() && !audioCapture.hasSpeechAfter(decodedEnd)) {
+            val cachedTranscript = cachedWords.joinToString(" ") { it.text }.trim()
+            if (cachedTranscript.isNotBlank()) {
+                val postReleaseMs = System.currentTimeMillis() - tRelease0
+                Log.i(
+                    TAG,
+                    "Voz Live Turbo HIT! Reused speculative transcript in ${postReleaseMs}ms post-release: \"$cachedTranscript\""
+                )
+                cancelLiveSession()
+                return cachedTranscript
+            }
+        }
+
+        // Case 2: Did Live.swift commit earlier chunks during a long dictation?
+        val committed = liveCommittedWords
+        val baseOffset = liveBaseSampleOffset
+        if (baseOffset > 0 && committed.isNotEmpty()) {
+            val (_, tailSlice) = audioCapture.getActiveSamplesSnapshot(baseOffset)
+            ensureLoaded()
+            val tailWords = engineMutex.withLock {
+                resetIdleUnloadTimerLocked()
+                if (tailSlice.size >= 1600 && audioCapture.hasSpeechAfter(baseOffset)) {
+                    decodeWordsLocked(
+                        samples = tailSlice,
+                        baseTimeOffsetSec = baseOffset.toDouble() / configuration.sampleRate.toDouble()
+                    )
+                } else {
+                    emptyList()
+                }
+            }
+            val allWords = combineCommittedAndActive(committed, tailWords)
+            val finalTranscript = allWords.joinToString(" ") { it.text }.trim()
+            val postReleaseMs = System.currentTimeMillis() - tRelease0
+            Log.i(
+                TAG,
+                "Voz Live Turbo COMMITTED+TAIL finished in ${postReleaseMs}ms post-release: \"$finalTranscript\""
+            )
+            cancelLiveSession()
+            if (finalTranscript.isNotBlank()) {
+                return finalTranscript
+            }
+        }
+
+        cancelLiveSession()
+        return transcribe(finalSamples)
+    }
+
+    private fun combineCommittedAndActive(
+        committed: List<VozWords.TimedWord>,
+        active: List<VozWords.TimedWord>
+    ): List<VozWords.TimedWord> {
+        if (committed.isEmpty()) return active
+        if (active.isEmpty()) return committed
+        val (repairedP, repairedS) = VozWords.repairJoin(committed, active)
+        return repairedP + repairedS
+    }
+
+    /**
      * Transcribes 16 kHz mono float32 PCM samples using `desert-ant-labs/voz`.
      */
     suspend fun transcribe(samples: FloatArray): String {
@@ -285,82 +534,89 @@ class VozEngine(private val context: Context) {
 
         return engineMutex.withLock {
             resetIdleUnloadTimerLocked()
-            withContext(Dispatchers.Default) {
-                val prevPriority = runCatching {
-                    val tid = Process.myTid()
-                    val old = Process.getThreadPriority(tid)
-                    Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_DISPLAY)
-                    old
-                }.getOrDefault(Process.THREAD_PRIORITY_DEFAULT)
-                try {
-                    val c = configuration
-                    val env = requireNotNull(ortEnv)
-                    val enc = requireNotNull(encoderSession)
-                    val dec = requireNotNull(decoderSession)
+            val words = decodeWordsLocked(samples, baseTimeOffsetSec = 0.0)
+            val finalTranscript = words.joinToString(" ") { it.text }.trim()
+            Log.i(TAG, "Final transcript: \"$finalTranscript\"")
+            finalTranscript
+        }
+    }
 
-                // Add a small 160ms right-context silence pad if utterance is short (< 2.5s)
-                // so FastConformer's 8x subsampling has clean trailing context frames.
-                val preparedSamples = if (samples.size < (c.sampleRate * 5) / 2) {
-                    val padSamples = (c.sampleRate * 0.16).toInt()
-                    FloatArray(min(c.nSamples, samples.size + padSamples)).also { padded ->
-                        System.arraycopy(samples, 0, padded, 0, min(samples.size, padded.size))
-                    }
+    private suspend fun decodeWordsLocked(
+        samples: FloatArray,
+        baseTimeOffsetSec: Double
+    ): List<VozWords.TimedWord> = withContext(Dispatchers.Default) {
+        if (samples.isEmpty()) return@withContext emptyList()
+        val prevPriority = runCatching {
+            val tid = Process.myTid()
+            val old = Process.getThreadPriority(tid)
+            Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_DISPLAY)
+            old
+        }.getOrDefault(Process.THREAD_PRIORITY_DEFAULT)
+        try {
+            val c = configuration
+            val env = requireNotNull(ortEnv)
+            val enc = requireNotNull(encoderSession)
+            val dec = requireNotNull(decoderSession)
+
+            // Add a small 160ms right-context silence pad if utterance is short (< 2.5s)
+            // so FastConformer's 8x subsampling has clean trailing context frames.
+            val preparedSamples = if (samples.size < (c.sampleRate * 5) / 2) {
+                val padSamples = (c.sampleRate * 0.16).toInt()
+                FloatArray(min(c.nSamples, samples.size + padSamples)).also { padded ->
+                    System.arraycopy(samples, 0, padded, 0, min(samples.size, padded.size))
+                }
+            } else {
+                samples
+            }
+
+            val secondsPerEncoderFrame = (c.hopLength * 8).toDouble() / c.sampleRate.toDouble()
+            val windows = sliceWindows(preparedSamples, c)
+            var mergedWords = emptyList<VozWords.TimedWord>()
+            var prevWindowEndSec = baseTimeOffsetSec
+
+            for ((windowStartSample, windowSlice) in windows) {
+                val windowStartSec = baseTimeOffsetSec + windowStartSample.toDouble() / c.sampleRate.toDouble()
+                val windowEndSec = baseTimeOffsetSec + (windowStartSample + windowSlice.size).toDouble() / c.sampleRate.toDouble()
+
+                val tEnc0 = System.currentTimeMillis()
+                val decoded = transcribeSingleWindow(env, enc, dec, windowSlice, c)
+                val tEnc1 = System.currentTimeMillis()
+
+                val windowWords = VozWords.assembleWords(
+                    tokens = decoded.tokens,
+                    frames = decoded.frames,
+                    ends = decoded.ends,
+                    windowStartSeconds = windowStartSec,
+                    secondsPerEncoderFrame = secondsPerEncoderFrame,
+                    vocabulary = vocabulary
+                )
+
+                Log.i(
+                    TAG,
+                    "Window [${String.format("%.2f", windowStartSec)}s..${String.format("%.2f", windowEndSec)}s] " +
+                        "transcribed in ${tEnc1 - tEnc0}ms -> ${decoded.tokens.size} tokens (${windowWords.size} words)"
+                )
+
+                mergedWords = if (mergedWords.isEmpty()) {
+                    windowWords
+                } else if (windowStartSec < prevWindowEndSec) {
+                    VozWords.spliceOverlap(
+                        prefix = mergedWords,
+                        suffix = windowWords,
+                        overlapStart = windowStartSec,
+                        overlapEnd = prevWindowEndSec
+                    )
                 } else {
-                    samples
+                    val (repairedP, repairedS) = VozWords.repairJoin(mergedWords, windowWords)
+                    repairedP + repairedS
                 }
+                prevWindowEndSec = windowEndSec
+            }
 
-                val secondsPerEncoderFrame = (c.hopLength * 8).toDouble() / c.sampleRate.toDouble()
-                val windows = sliceWindows(preparedSamples, c)
-                var mergedWords = emptyList<VozWords.TimedWord>()
-                var prevWindowEndSec = 0.0
-
-                for ((windowStartSample, windowSlice) in windows) {
-                    val windowStartSec = windowStartSample.toDouble() / c.sampleRate.toDouble()
-                    val windowEndSec = (windowStartSample + windowSlice.size).toDouble() / c.sampleRate.toDouble()
-
-                    val tEnc0 = System.currentTimeMillis()
-                    val decoded = transcribeSingleWindow(env, enc, dec, windowSlice, c)
-                    val tEnc1 = System.currentTimeMillis()
-
-                    val windowWords = VozWords.assembleWords(
-                        tokens = decoded.tokens,
-                        frames = decoded.frames,
-                        ends = decoded.ends,
-                        windowStartSeconds = windowStartSec,
-                        secondsPerEncoderFrame = secondsPerEncoderFrame,
-                        vocabulary = vocabulary
-                    )
-
-                    Log.i(
-                        TAG,
-                        "Window [${String.format("%.2f", windowStartSec)}s..${String.format("%.2f", windowEndSec)}s] " +
-                            "transcribed in ${tEnc1 - tEnc0}ms -> ${decoded.tokens.size} tokens (${windowWords.size} words)"
-                    )
-
-                    mergedWords = if (mergedWords.isEmpty()) {
-                        windowWords
-                    } else if (windowStartSec < prevWindowEndSec) {
-                        VozWords.spliceOverlap(
-                            prefix = mergedWords,
-                            suffix = windowWords,
-                            overlapStart = windowStartSec,
-                            overlapEnd = prevWindowEndSec
-                        )
-                    } else {
-                        val (repairedP, repairedS) = VozWords.repairJoin(mergedWords, windowWords)
-                        repairedP + repairedS
-                    }
-                    prevWindowEndSec = windowEndSec
-                }
-
-                    val finalTranscript = mergedWords.joinToString(" ") { it.text }.trim()
-                    Log.i(TAG, "Final transcript: \"$finalTranscript\"")
-                    finalTranscript
-                } finally {
-                    runCatching {
-                        Process.setThreadPriority(prevPriority)
-                    }
-                }
+            mergedWords
+        } finally {
+            runCatching {
+                Process.setThreadPriority(prevPriority)
             }
         }
     }
@@ -541,45 +797,49 @@ class VozEngine(private val context: Context) {
         val maxDecodeSteps = limit + 48
         var decodeSteps = 0
 
-        while (position < limit && decodeSteps < maxDecodeSteps) {
-            decodeSteps++
-            // 1. Copy embedding row for `label` into lane 0
-            System.arraycopy(embeddingTable, label * c.predHidden, embed, 0, c.predHidden)
+        // Pre-create the 4 OnnxTensor wrappers ONCE outside the TDT decode loop!
+        // Since they wrap Direct ByteBuffers, mutating embedDirect/hInDirect/cInDirect/encStepDirect in-place
+        // updates the underlying native memory with zero JNI tensor allocation/deallocation per step.
+        OnnxTensor.createTensor(env, embedDirect, embedShape).use { embedTensor ->
+            OnnxTensor.createTensor(env, hInDirect, stateShape).use { hInTensor ->
+                OnnxTensor.createTensor(env, cInDirect, stateShape).use { cInTensor ->
+                    OnnxTensor.createTensor(env, encStepDirect, stepShape).use { stepTensor ->
+                        val inputs = mapOf(
+                            "embed" to embedTensor,
+                            "h_in" to hInTensor,
+                            "c_in" to cInTensor,
+                            "enc_step" to stepTensor
+                        )
 
-            // 2. Gather `span` encoder frames across all `joint` channels for lane 0
-            val span = min(width, limit - position)
-            for (channel in 0 until joint) {
-                val dstBase = channel * width
-                val srcBase = channel * total + position
-                for (w in 0 until span) {
-                    encStep[dstBase + w] = encProj[srcBase + w]
-                }
-                for (w in span until width) {
-                    encStep[dstBase + w] = 0f
-                }
-            }
+                        while (position < limit && decodeSteps < maxDecodeSteps) {
+                            decodeSteps++
+                            // 1. Copy embedding row for `label` into lane 0
+                            System.arraycopy(embeddingTable, label * c.predHidden, embed, 0, c.predHidden)
 
-            // 3. Stage into zero-copy Direct FloatBuffers & run TDT decode step (`reducesInGraph = true`)
-            embedDirect.clear(); embedDirect.put(embed); embedDirect.rewind()
-            hInDirect.clear(); hInDirect.put(hIn); hInDirect.rewind()
-            cInDirect.clear(); cInDirect.put(cIn); cInDirect.rewind()
-            encStepDirect.clear(); encStepDirect.put(encStep); encStepDirect.rewind()
+                            // 2. Gather `span` encoder frames across all `joint` channels for lane 0
+                            val span = min(width, limit - position)
+                            for (channel in 0 until joint) {
+                                val dstBase = channel * width
+                                val srcBase = channel * total + position
+                                for (w in 0 until span) {
+                                    encStep[dstBase + w] = encProj[srcBase + w]
+                                }
+                                for (w in span until width) {
+                                    encStep[dstBase + w] = 0f
+                                }
+                            }
 
-            var tok0 = blank
-            var tok1 = blank
-            var dur0 = 0
-            var dur1 = 0
+                            // 3. Update zero-copy Direct FloatBuffers in-place
+                            embedDirect.clear(); embedDirect.put(embed); embedDirect.rewind()
+                            hInDirect.clear(); hInDirect.put(hIn); hInDirect.rewind()
+                            cInDirect.clear(); cInDirect.put(cIn); cInDirect.rewind()
+                            encStepDirect.clear(); encStepDirect.put(encStep); encStepDirect.rewind()
 
-            OnnxTensor.createTensor(env, embedDirect, embedShape).use { embedTensor ->
-                OnnxTensor.createTensor(env, hInDirect, stateShape).use { hInTensor ->
-                    OnnxTensor.createTensor(env, cInDirect, stateShape).use { cInTensor ->
-                        OnnxTensor.createTensor(env, encStepDirect, stepShape).use { stepTensor ->
-                            val inputs = mapOf(
-                                "embed" to embedTensor,
-                                "h_in" to hInTensor,
-                                "c_in" to cInTensor,
-                                "enc_step" to stepTensor
-                            )
+                            var tok0 = blank
+                            var tok1 = blank
+                            var dur0 = 0
+                            var dur1 = 0
+
                             dec.run(inputs).use { result ->
                                 val tokTensor = result.get("tok").get() as OnnxTensor
                                 val durTensor = result.get("dur").get() as OnnxTensor
@@ -596,42 +856,42 @@ class VozEngine(private val context: Context) {
                                 hOutTensor.floatBuffer.get(hOutBuf, 0, hidden)
                                 cOutTensor.floatBuffer.get(cOutBuf, 0, hidden)
                             }
+
+                            // 4. Advance TDT state machine across `span` frames
+                            var offset = 0
+                            var didEmit = false
+                            while (offset < span) {
+                                val bestTok = if (offset == 0) tok0 else tok1
+                                val bestDurIdx = if (offset == 0) dur0 else dur1
+                                val duration = c.durations.getOrElse(bestDurIdx) { 1 }
+
+                                if (bestTok != blank) {
+                                    tokens.add(bestTok)
+                                    frames.add(position + offset)
+                                    ends.add(position + offset + duration)
+                                    System.arraycopy(hOutBuf, 0, hIn, 0, hidden)
+                                    System.arraycopy(cOutBuf, 0, cIn, 0, hidden)
+                                    label = bestTok
+                                    emitted += 1
+                                    var step = duration
+                                    // TDT may predict a zero duration; force progress after 3 emissions on one frame
+                                    if (step == 0 && emitted >= 3) {
+                                        step = 1
+                                        emitted = 0
+                                    }
+                                    position += offset + step
+                                    didEmit = true
+                                    break
+                                }
+                                emitted = 0
+                                offset += if (duration > 0) duration else 1
+                            }
+                            if (!didEmit) {
+                                position += max(offset, 1)
+                            }
                         }
                     }
                 }
-            }
-
-            // 4. Advance TDT state machine across `span` frames
-            var offset = 0
-            var didEmit = false
-            while (offset < span) {
-                val bestTok = if (offset == 0) tok0 else tok1
-                val bestDurIdx = if (offset == 0) dur0 else dur1
-                val duration = c.durations.getOrElse(bestDurIdx) { 1 }
-
-                if (bestTok != blank) {
-                    tokens.add(bestTok)
-                    frames.add(position + offset)
-                    ends.add(position + offset + duration)
-                    System.arraycopy(hOutBuf, 0, hIn, 0, hidden)
-                    System.arraycopy(cOutBuf, 0, cIn, 0, hidden)
-                    label = bestTok
-                    emitted += 1
-                    var step = duration
-                    // TDT may predict a zero duration; force progress after 3 emissions on one frame
-                    if (step == 0 && emitted >= 3) {
-                        step = 1
-                        emitted = 0
-                    }
-                    position += offset + step
-                    didEmit = true
-                    break
-                }
-                emitted = 0
-                offset += if (duration > 0) duration else 1
-            }
-            if (!didEmit) {
-                position += max(offset, 1)
             }
         }
 
