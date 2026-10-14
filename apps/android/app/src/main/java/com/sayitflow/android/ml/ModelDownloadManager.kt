@@ -42,7 +42,7 @@ class ModelDownloadManager(private val context: Context) {
 
     companion object {
         private const val VOZ_BASE_URL = "https://huggingface.co/desert-ant-labs/voz/resolve/main/web"
-        private const val S1_MINI_URL = "https://huggingface.co/suprwhspr/s1-mini/resolve/main/s1-mini-q4_k_m.gguf"
+        private const val S1_MINI_URL = "https://huggingface.co/superwhisper/s1-mini-GGUF/resolve/main/s1-mini-q4_k_m.gguf"
 
         val VOZ_ASSETS = listOf(
             RemoteAsset("meta.json", "$VOZ_BASE_URL/meta.json", 539L),
@@ -54,7 +54,7 @@ class ModelDownloadManager(private val context: Context) {
         )
 
         val VOZ_TOTAL_BYTES = VOZ_ASSETS.sumOf { it.expectedBytes } // ~384.8 MB
-        const val S1_MINI_TOTAL_BYTES = 247_100_000L // ~247 MB
+        const val S1_MINI_TOTAL_BYTES = 484_219_808L // ~461.8 MB
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)

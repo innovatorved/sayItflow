@@ -563,8 +563,20 @@ private fun S1MiniCard(
                 }
             }
         } else if (!status.isInstalled) {
-            OutlinedButton(onClick = onDownload) {
-                Text("Download S1-mini GGUF Weights (247 MB)", color = TextPrimary, fontSize = 12.sp)
+            status.errorMessage?.let { err ->
+                Text("Error: $err", color = Color(0xFFF87171), fontSize = 12.sp)
+                Spacer(modifier = Modifier.height(6.dp))
+            }
+            Button(
+                onClick = onDownload,
+                colors = ButtonDefaults.buttonColors(containerColor = TextPrimary, contentColor = BgCanvas)
+            ) {
+                val label = if (status.downloadedBytes > 0L) {
+                    "Resume S1-mini Download (${status.downloadedBytes / (1024 * 1024)} / 462 MB)"
+                } else {
+                    "Download S1-mini GGUF Weights (462 MB)"
+                }
+                Text(label, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
             }
         } else {
             Row(
