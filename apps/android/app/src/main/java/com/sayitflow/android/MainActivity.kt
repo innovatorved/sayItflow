@@ -73,10 +73,7 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         val coordinator = SayItFlowCoordinator.getInstance(this)
         refreshPermissions(coordinator)
-        coordinator.downloadManager.refreshStatus()
-        if (coordinator.vozEngine.areModelFilesInstalled()) {
-            coordinator.vozEngine.warmUpAsync()
-        }
+        coordinator.senseVoiceEngine.prepareAssetsOnDiskAsync()
     }
 
     private fun refreshPermissions(coordinator: SayItFlowCoordinator) {

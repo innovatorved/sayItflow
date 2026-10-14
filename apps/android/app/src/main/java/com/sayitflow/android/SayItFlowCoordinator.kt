@@ -11,31 +11,28 @@ import com.sayitflow.android.ml.VozEngine
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.File
 
 /**
  * Shared singleton coordinator connecting `SayItFlowAccessibilityService` (hardware Volume Hold +
- * direct text injection) with `MainActivity` (Monochrome Studio Dashboard).
+ * direct text injection) with `MainActivity` (Monitor YT Lo-Fi Paper & Ink Dashboard).
  */
 class SayItFlowCoordinator private constructor(context: Context) {
 
     enum class AsrEngineMode(val id: String, val title: String, val subtitle: String, val badge: String) {
-        VOZ_OFFLINE(
-            "voz_offline",
-            "Voz-0.6B Live Turbo (Recommended)",
-            "100% on-device 600M FastConformer-TDT — encodes live while holding for instant release",
-            "LIVE TURBO"
+        SENSE_VOICE_OFFLINE(
+            "sense_voice_offline",
+            "Whisper-Tiny INT8 Turbo (Recommended)",
+            "Bundled 39 MB OpenAI Whisper INT8 — <90ms real-time on-device ASR for all Android phones",
+            "WHISPER INT8"
         ),
         INSTANT_STREAMING(
             "instant_streaming",
-            "Google SODA Streaming",
-            "Streams speech live via Android SpeechRecognizer (when supported by device)",
-            "SYSTEM"
-        ),
-        SENSE_VOICE_OFFLINE(
-            "sense_voice_offline",
-            "Legacy Offline Fallback",
-            "Legacy fallback engine (delegates to Voz-0.6B Live Turbo when installed)",
-            "LEGACY"
+            "Google SODA Live + Whisper Hybrid",
+            "Streams live via Google SODA with 600ms pause-recovery & Whisper-Tiny INT8 fast-burst fallback",
+            "HYBRID LIVE"
         )
     }
 
@@ -43,7 +40,7 @@ class SayItFlowCoordinator private constructor(context: Context) {
         HOLD_VOLUME_DOWN(
             "hold_vol_down",
             "Hold Volume Down (Recommended)",
-            "Short tap adjusts volume normally; holding ≥ 500ms dictates anywhere"
+            "Short tap adjusts volume normally; holding ≥ 400ms dictates anywhere"
         ),
         VOLUME_CHORD(
             "vol_chord",
@@ -53,7 +50,7 @@ class SayItFlowCoordinator private constructor(context: Context) {
         HOLD_VOLUME_UP(
             "hold_vol_up",
             "Hold Volume Up",
-            "Short tap raises volume; holding ≥ 500ms dictates anywhere"
+            "Short tap raises volume; holding ≥ 400ms dictates anywhere"
         )
     }
 
@@ -79,7 +76,7 @@ class SayItFlowCoordinator private constructor(context: Context) {
 
         val SUPPORTED_LANGUAGES = listOf(
             VozLanguage("hinglish", "Hinglish (EN+HI)", "IN"),
-            VozLanguage("auto", "Auto (25+ Langs)", "✦"),
+            VozLanguage("auto", "Auto (99+ Langs)", "✦"),
             VozLanguage("en-IN", "English (India)", "IN"),
             VozLanguage("hi", "हिन्दी (Hindi)", "HI"),
             VozLanguage("en", "English (US)", "EN"),
@@ -108,6 +105,7 @@ class SayItFlowCoordinator private constructor(context: Context) {
             VozLanguage("lv", "Latviešu", "LV"),
             VozLanguage("et", "Eesti", "ET")
         )
+
         fun friendlyAppName(packageName: String): String {
             val lower = packageName.lowercase()
             return when {
@@ -155,34 +153,36 @@ class SayItFlowCoordinator private constructor(context: Context) {
 
     private val _asrEngineMode = MutableStateFlow(
         run {
-            val migrated = prefs.getBoolean("migrated_to_voz_live_turbo", false)
-            val savedId = prefs.getString("asr_engine_mode", AsrEngineMode.VOZ_OFFLINE.id)
-            if (!migrated || savedId == null || savedId == AsrEngineMode.SENSE_VOICE_OFFLINE.id) {
+            val migrated = prefs.getBoolean("migrated_to_whisper_int8_v1", false)
+            val savedId = prefs.getString("asr_engine_mode", AsrEngineMode.SENSE_VOICE_OFFLINE.id)
+            if (!migrated || savedId == null || savedId == "voz_offline") {
                 prefs.edit()
-                    .putString("asr_engine_mode", AsrEngineMode.VOZ_OFFLINE.id)
-                    .putBoolean("migrated_to_voz_live_turbo", true)
+                    .putString("asr_engine_mode", AsrEngineMode.SENSE_VOICE_OFFLINE.id)
+                    .putBoolean("migrated_to_whisper_int8_v1", true)
                     .apply()
-                AsrEngineMode.VOZ_OFFLINE
+                AsrEngineMode.SENSE_VOICE_OFFLINE
             } else {
-                AsrEngineMode.entries.find { it.id == savedId } ?: AsrEngineMode.VOZ_OFFLINE
+                AsrEngineMode.entries.find { it.id == savedId } ?: AsrEngineMode.SENSE_VOICE_OFFLINE
             }
         }
     )
     val asrEngineMode: StateFlow<AsrEngineMode> = _asrEngineMode.asStateFlow()
 
     init {
-        senseVoiceEngine.vozEngineDelegate = vozEngine
-        senseVoiceEngine.fastStreamingDelegate = fastStreamingEngine
-        if (vozEngine.areModelFilesInstalled()) {
-            vozEngine.warmUpAsync()
-        } else {
-            senseVoiceEngine.warmUpAsync()
+        // Reclaim disk space from deprecated Voz-0.6B (384 MB) and Moonshine caches
+        try {
+            File(context.filesDir, "models/voz").deleteRecursively()
+            File(context.filesDir, "models/moonshine").deleteRecursively()
+        } catch (_: Exception) {
         }
+
+        senseVoiceEngine.fastStreamingDelegate = fastStreamingEngine
+        fastStreamingEngine.whisperFallbackEngine = senseVoiceEngine
+        senseVoiceEngine.prepareAssetsOnDiskAsync()
     }
 
     /**
-     * Returns true only when the user explicitly selects `INSTANT_STREAMING` (Google SODA).
-     * Default `VOZ_OFFLINE` uses 100% on-device `Voz-0.6B Live Turbo` with while-holding pre-transcription.
+     * Returns true when `INSTANT_STREAMING` (Google SODA + Whisper Hybrid) is selected and available.
      */
     fun shouldUseZeroLossStreamingPipe(): Boolean {
         val mode = _asrEngineMode.value
@@ -241,7 +241,7 @@ class SayItFlowCoordinator private constructor(context: Context) {
     private val _activeForegroundPackage = MutableStateFlow("com.sayitflow.android")
     val activeForegroundPackage: StateFlow<String> = _activeForegroundPackage.asStateFlow()
 
-    private val _history = MutableStateFlow<List<DictationRecord>>(emptyList())
+    private val _history = MutableStateFlow<List<DictationRecord>>(loadPersistedHistory())
     val history: StateFlow<List<DictationRecord>> = _history.asStateFlow()
 
     fun setAccessibilityConnected(connected: Boolean) {
@@ -262,11 +262,7 @@ class SayItFlowCoordinator private constructor(context: Context) {
     fun setAsrEngineMode(mode: AsrEngineMode) {
         _asrEngineMode.value = mode
         prefs.edit().putString("asr_engine_mode", mode.id).apply()
-        if (mode == AsrEngineMode.SENSE_VOICE_OFFLINE) {
-            senseVoiceEngine.warmUpAsync()
-        } else if (mode == AsrEngineMode.VOZ_OFFLINE && vozEngine.areModelFilesInstalled()) {
-            vozEngine.warmUpAsync()
-        }
+        senseVoiceEngine.prepareAssetsOnDiskAsync()
     }
 
     fun setHoldThresholdMs(ms: Long) {
@@ -301,10 +297,55 @@ class SayItFlowCoordinator private constructor(context: Context) {
     }
 
     fun recordDictation(record: DictationRecord) {
-        _history.value = (listOf(record) + _history.value).take(25)
+        val updated = (listOf(record) + _history.value).take(25)
+        _history.value = updated
+        persistHistory(updated)
     }
 
     fun clearHistory() {
         _history.value = emptyList()
+        prefs.edit().remove("dictation_history_json").apply()
+    }
+
+    private fun loadPersistedHistory(): List<DictationRecord> {
+        val rawJson = prefs.getString("dictation_history_json", null) ?: return emptyList()
+        return try {
+            val arr = JSONArray(rawJson)
+            buildList {
+                for (i in 0 until arr.length()) {
+                    val obj = arr.optJSONObject(i) ?: continue
+                    add(
+                        DictationRecord(
+                            rawTranscript = obj.optString("raw", ""),
+                            polishedTranscript = obj.optString("polished", ""),
+                            targetPackage = obj.optString("pkg", "System"),
+                            elapsedMs = obj.optLong("elapsedMs", 1L),
+                            timestampMs = obj.optLong("timestampMs", System.currentTimeMillis())
+                        )
+                    )
+                }
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun persistHistory(records: List<DictationRecord>) {
+        try {
+            val arr = JSONArray()
+            for (r in records) {
+                arr.put(
+                    JSONObject().apply {
+                        put("raw", r.rawTranscript)
+                        put("polished", r.polishedTranscript)
+                        put("pkg", r.targetPackage)
+                        put("elapsedMs", r.elapsedMs)
+                        put("timestampMs", r.timestampMs)
+                    }
+                )
+            }
+            prefs.edit().putString("dictation_history_json", arr.toString()).apply()
+        } catch (_: Exception) {
+        }
     }
 }

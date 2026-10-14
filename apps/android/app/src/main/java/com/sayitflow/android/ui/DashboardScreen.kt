@@ -38,18 +38,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.DeleteOutline
-import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.History
-import androidx.compose.material.icons.rounded.KeyboardVoice
-import androidx.compose.material.icons.rounded.Memory
 import androidx.compose.material.icons.rounded.Mic
-import androidx.compose.material.icons.rounded.Security
-import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.HorizontalDivider
@@ -80,14 +74,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sayitflow.android.SayItFlowCoordinator
-import com.sayitflow.android.ml.ModelDownloadManager
 import com.sayitflow.android.ml.S1MiniEngine
-import com.sayitflow.android.ml.VozEngine
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -118,8 +109,6 @@ private val AccentRedDeep = Color(0xFFD52817)
 private val AccentYellow = Color(0xFFFFCE4A)
 private val AccentTeal = Color(0xFF36C2AD)
 private val AccentSky = Color(0xFF74A7FF)
-private val AccentCoral = Color(0xFFFF9E86)
-private val AccentLilac = Color(0xFFC8A8FF)
 
 /**
  * Draws the signature `monitoryt.com` hard offset neo-brutalist shadow (`4dp 4dp 0 var(--ink)`),
@@ -215,17 +204,16 @@ fun DashboardScreen(
     val batchWaveform by coordinator.audioCapture.waveformLevels.collectAsState()
     val streamWaveform by coordinator.fastStreamingEngine.waveformLevels.collectAsState()
     val waveformLevels = if (isStreamListening) streamWaveform else batchWaveform
-    val peakAmplitude = waveformLevels.maxOrNull() ?: 0.12f
 
     val liveStreamTranscript by coordinator.fastStreamingEngine.liveTranscript.collectAsState()
+    val liveWhisperPreview by coordinator.senseVoiceEngine.livePreviewText.collectAsState()
+    val livePartialText = if (isStreamListening) liveStreamTranscript else liveWhisperPreview
+
     val asrEngineMode by coordinator.asrEngineMode.collectAsState()
+    val isWhisperLoaded by coordinator.senseVoiceEngine.isLoaded.collectAsState()
 
     val isAccessibilityConnected by coordinator.accessibilityConnected.collectAsState()
     val activeForegroundPkg by coordinator.activeForegroundPackage.collectAsState()
-
-    val vozStatus by coordinator.downloadManager.vozStatus.collectAsState()
-    val isVozLoaded by coordinator.vozEngine.isLoaded.collectAsState()
-    val isVozWarming by coordinator.vozEngine.isWarmingUp.collectAsState()
 
     val selectedLanguage by coordinator.selectedLanguage.collectAsState()
     val triggerMode by coordinator.triggerMode.collectAsState()
@@ -245,11 +233,9 @@ fun DashboardScreen(
     var copiedScratchpad by remember { mutableStateOf(false) }
     var recordingElapsedMs by remember { mutableLongStateOf(0L) }
 
-    // Pre-warm Voz-0.6B automatically only if Voz offline mode is selected and installed
-    LaunchedEffect(vozStatus.isInstalled, asrEngineMode) {
-        if (asrEngineMode == SayItFlowCoordinator.AsrEngineMode.VOZ_OFFLINE && vozStatus.isInstalled) {
-            coordinator.vozEngine.warmUpAsync()
-        }
+    // Ensure bundled Whisper-Tiny INT8 files exist on disk (0 MB loaded in RAM while idle)
+    LaunchedEffect(asrEngineMode) {
+        coordinator.senseVoiceEngine.prepareAssetsOnDiskAsync()
     }
 
     // Track recording timer
@@ -308,7 +294,7 @@ fun DashboardScreen(
                 scope.launch {
                     val t0 = System.currentTimeMillis()
                     try {
-                        val raw = coordinator.fastStreamingEngine.stopAndAwaitTranscript(maxWaitMs = 1800L)
+                        val raw = coordinator.fastStreamingEngine.stopAndAwaitTranscript(maxWaitMs = 1500L)
                         if (raw.isBlank()) {
                             statusBannerText = "No speech detected — speak clearly near the microphone."
                         } else {
@@ -332,7 +318,7 @@ fun DashboardScreen(
                                 "$baseScratchpadBeforeStream $finalOut"
                             }
                             copyText(finalOut)
-                            statusBannerText = "Transcribed in ${elapsed}ms · Copied to clipboard ✓"
+                            statusBannerText = "⚡ ${elapsed}ms · Hybrid SODA+Whisper · Copied ✓"
                             coordinator.recordDictation(
                                 SayItFlowCoordinator.DictationRecord(
                                     rawTranscript = raw,
@@ -352,51 +338,38 @@ fun DashboardScreen(
             return
         }
 
-        if (asrEngineMode == SayItFlowCoordinator.AsrEngineMode.VOZ_OFFLINE && !coordinator.vozEngine.areModelFilesInstalled()) {
-            statusBannerText = "Downloading Voz-0.6B ASR model (384 MB)..."
-            coordinator.downloadManager.startVozDownload()
-            return
-        }
-
         if (!isBatchRecording) {
             statusBannerText = null
             val started = coordinator.audioCapture.startRecording()
             if (started) {
-                if (coordinator.vozEngine.areModelFilesInstalled()) {
-                    coordinator.vozEngine.startLiveSession(coordinator.audioCapture)
-                }
+                coordinator.senseVoiceEngine.startLiveSession(coordinator.audioCapture)
             } else {
                 statusBannerText = "Could not open microphone. Check permission."
             }
         } else {
             val samples = coordinator.audioCapture.stopRecording()
             val rawMs = coordinator.audioCapture.lastRawDurationMs
-            if (rawMs < 200L) {
-                coordinator.vozEngine.cancelLiveSession()
+            if (rawMs < 180L) {
+                coordinator.senseVoiceEngine.cancelLiveSession()
                 statusBannerText = "Recording too short — speak clearly near the microphone."
                 return
             }
             if (samples.size < 1600) {
-                coordinator.vozEngine.cancelLiveSession()
+                coordinator.senseVoiceEngine.cancelLiveSession()
                 statusBannerText = "No speech detected — speak clearly near the microphone."
                 return
             }
             isInAppTranscribing = true
-            statusBannerText = if (isVozLoaded) {
-                "Finalizing Voz-0.6B Live Turbo..."
-            } else {
-                "Warming Voz-0.6B in RAM & transcribing..."
-            }
+            statusBannerText = "Transcribing with Whisper-Tiny INT8 Turbo..."
             scope.launch {
                 val t0 = System.currentTimeMillis()
                 try {
-                    val raw = if (coordinator.vozEngine.areModelFilesInstalled()) {
-                        coordinator.vozEngine.finishLiveSession(samples, coordinator.audioCapture)
-                    } else if (asrEngineMode == SayItFlowCoordinator.AsrEngineMode.SENSE_VOICE_OFFLINE) {
-                        coordinator.senseVoiceEngine.transcribe(samples, language = selectedLanguage).text
-                    } else {
-                        coordinator.vozEngine.transcribe(samples)
-                    }
+                    val raw = coordinator.senseVoiceEngine.finishLiveSession(
+                        finalNormalizedSamples = samples,
+                        rawSampleCount = coordinator.audioCapture.lastRawSampleCount,
+                        audioCaptureManager = coordinator.audioCapture,
+                        language = selectedLanguage
+                    ).text
                     if (raw.isBlank()) {
                         statusBannerText = "No speech detected. Speak clearly near the microphone."
                     } else {
@@ -413,14 +386,14 @@ fun DashboardScreen(
                         } else {
                             raw
                         }
-                        val elapsed = System.currentTimeMillis() - t0
+                        val elapsed = (System.currentTimeMillis() - t0).coerceAtLeast(1L)
                         scratchpadText = if (scratchpadText.isBlank()) {
                             finalOut
                         } else {
                             "$scratchpadText $finalOut"
                         }
                         copyText(finalOut)
-                        statusBannerText = "Transcribed in ${elapsed}ms · Copied to clipboard ✓"
+                        statusBannerText = "⚡ ${elapsed}ms · Whisper INT8 · Copied ✓"
                         coordinator.recordDictation(
                             SayItFlowCoordinator.DictationRecord(
                                 rawTranscript = raw,
@@ -439,9 +412,7 @@ fun DashboardScreen(
         }
     }
 
-    val isSystemFullyReady = hasMicPermission &&
-        isAccessibilityConnected &&
-        (asrEngineMode != SayItFlowCoordinator.AsrEngineMode.VOZ_OFFLINE || vozStatus.isInstalled)
+    val isSystemFullyReady = hasMicPermission && isAccessibilityConnected
 
     Column(
         modifier = Modifier
@@ -452,23 +423,11 @@ fun DashboardScreen(
         // 1. Monitor YT Lo-Fi Paper Header Bar + Ink Ticker Strip
         LofiHeaderBar(
             asrEngineMode = asrEngineMode,
-            vozStatus = vozStatus,
-            isVozLoaded = isVozLoaded,
-            isVozWarming = isVozWarming,
+            isWhisperLoaded = isWhisperLoaded,
             isSystemReady = isSystemFullyReady,
             triggerMode = triggerMode,
             isS1MiniEnabled = isS1MiniEnabled,
-            onClickStatus = {
-                if (asrEngineMode == SayItFlowCoordinator.AsrEngineMode.VOZ_OFFLINE) {
-                    if (!vozStatus.isInstalled && !vozStatus.isDownloading) {
-                        coordinator.downloadManager.startVozDownload()
-                    } else if (!isVozLoaded && !isVozWarming) {
-                        coordinator.vozEngine.warmUpAsync()
-                    }
-                } else {
-                    activeTab = AppTab.SETTINGS
-                }
-            }
+            onClickStatus = { activeTab = AppTab.SETTINGS }
         )
 
         // 2. Main Scrollable Canvas
@@ -486,19 +445,15 @@ fun DashboardScreen(
                 onSelectTab = { activeTab = it }
             )
 
-            // Setup Checklist (only shown if any permission or required model is missing)
+            // Setup Checklist (only shown if any permission is missing)
             if (!isSystemFullyReady) {
                 SetupChecklistCard(
                     hasMicPermission = hasMicPermission,
                     isAccessibilityConnected = isAccessibilityConnected,
                     asrEngineMode = asrEngineMode,
-                    vozStatus = vozStatus,
-                    isVozLoaded = isVozLoaded,
-                    isVozWarming = isVozWarming,
                     triggerMode = triggerMode,
                     onRequestMicPermission = onRequestMicPermission,
-                    onOpenAccessibilitySettings = onOpenAccessibilitySettings,
-                    onDownloadVoz = { coordinator.downloadManager.startVozDownload() }
+                    onOpenAccessibilitySettings = onOpenAccessibilitySettings
                 )
             }
 
@@ -508,12 +463,9 @@ fun DashboardScreen(
                     VoiceDictationCard(
                         isRecording = isRecording,
                         isTranscribing = isInAppTranscribing,
-                        isVozWarming = isVozWarming,
-                        isVozLoaded = isVozLoaded,
                         recordingElapsedMs = recordingElapsedMs,
                         waveformLevels = waveformLevels,
-                        peakAmplitude = peakAmplitude,
-                        triggerMode = triggerMode,
+                        livePartialText = livePartialText,
                         scratchpadText = scratchpadText,
                         statusBannerText = statusBannerText,
                         copiedScratchpad = copiedScratchpad,
@@ -557,22 +509,16 @@ fun DashboardScreen(
                         isEnabled = isS1MiniEnabled,
                         selectedStyle = s1Style,
                         selectedStructure = s1Structure,
-                        customContext = s1CustomContext,
                         activeForegroundPkg = activeForegroundPkg,
                         onToggleEnabled = { coordinator.setS1MiniEnabled(it) },
                         onSelectStyle = { coordinator.setS1Style(it) },
-                        onSelectStructure = { coordinator.setS1Structure(it) },
-                        onUpdateCustomContext = { coordinator.setS1CustomContext(it) }
+                        onSelectStructure = { coordinator.setS1Structure(it) }
                     )
 
                     ModelManagementCard(
                         asrEngineMode = asrEngineMode,
-                        vozStatus = vozStatus,
-                        isVozLoaded = isVozLoaded,
-                        isVozWarming = isVozWarming,
-                        onSelectEngineMode = { coordinator.setAsrEngineMode(it) },
-                        onDownloadVoz = { coordinator.downloadManager.startVozDownload() },
-                        onWarmUpVoz = { coordinator.vozEngine.warmUpAsync() }
+                        isWhisperLoaded = isWhisperLoaded,
+                        onSelectEngineMode = { coordinator.setAsrEngineMode(it) }
                     )
                 }
 
@@ -596,37 +542,17 @@ fun DashboardScreen(
 @Composable
 private fun LofiHeaderBar(
     asrEngineMode: SayItFlowCoordinator.AsrEngineMode,
-    vozStatus: ModelDownloadManager.ModelStatus,
-    isVozLoaded: Boolean,
-    isVozWarming: Boolean,
+    isWhisperLoaded: Boolean,
     isSystemReady: Boolean,
     triggerMode: SayItFlowCoordinator.TriggerMode,
     isS1MiniEnabled: Boolean,
     onClickStatus: () -> Unit
 ) {
-    val statusFill = if (asrEngineMode != SayItFlowCoordinator.AsrEngineMode.VOZ_OFFLINE) {
-        AccentTeal
-    } else {
-        when {
-            isVozLoaded -> AccentTeal
-            isVozWarming || vozStatus.isDownloading -> AccentYellow
-            vozStatus.isInstalled -> AccentYellow
-            else -> AccentCoral
-        }
-    }
+    val statusFill = if (isWhisperLoaded) AccentTeal else AccentYellow
     val statusLabel = when (asrEngineMode) {
-        SayItFlowCoordinator.AsrEngineMode.SENSE_VOICE_OFFLINE -> "On-Device Ready"
-        SayItFlowCoordinator.AsrEngineMode.INSTANT_STREAMING -> "Instant ~120ms"
-        SayItFlowCoordinator.AsrEngineMode.VOZ_OFFLINE -> when {
-            vozStatus.isInstalled -> when {
-                isVozLoaded -> "Voz-0.6B Ready"
-                isVozWarming -> "Warming RAM..."
-                else -> "Voz-0.6B Standby"
-            }
-            vozStatus.isDownloading -> "Downloading ${(vozStatus.progressFraction * 100).toInt()}%"
-            vozStatus.errorMessage != null -> "Retry Download"
-            else -> "Download Voz"
-        }
+        SayItFlowCoordinator.AsrEngineMode.SENSE_VOICE_OFFLINE ->
+            if (isWhisperLoaded) "Whisper INT8" else "Warming INT8..."
+        SayItFlowCoordinator.AsrEngineMode.INSTANT_STREAMING -> "SODA + Whisper"
     }
 
     Column(
@@ -861,17 +787,10 @@ private fun SetupChecklistCard(
     hasMicPermission: Boolean,
     isAccessibilityConnected: Boolean,
     asrEngineMode: SayItFlowCoordinator.AsrEngineMode,
-    vozStatus: ModelDownloadManager.ModelStatus,
-    isVozLoaded: Boolean,
-    isVozWarming: Boolean,
     triggerMode: SayItFlowCoordinator.TriggerMode,
     onRequestMicPermission: () -> Unit,
-    onOpenAccessibilitySettings: () -> Unit,
-    onDownloadVoz: () -> Unit
+    onOpenAccessibilitySettings: () -> Unit
 ) {
-    val isEngineReady =
-        asrEngineMode != SayItFlowCoordinator.AsrEngineMode.VOZ_OFFLINE || vozStatus.isInstalled
-
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -916,7 +835,7 @@ private fun SetupChecklistCard(
                 )
             }
             Text(
-                text = "${listOf(hasMicPermission, isAccessibilityConnected, isEngineReady).count { it }}/3 DONE",
+                text = "${listOf(hasMicPermission, isAccessibilityConnected, true).count { it }}/3 DONE",
                 color = InkSoft,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
@@ -952,28 +871,18 @@ private fun SetupChecklistCard(
 
         val engineSub = when (asrEngineMode) {
             SayItFlowCoordinator.AsrEngineMode.SENSE_VOICE_OFFLINE ->
-                "On-Device Zero-Loss ASR Ready (All Android Phones)"
+                "Bundled Whisper-Tiny INT8 (39 MB · Ready Out of the Box)"
             SayItFlowCoordinator.AsrEngineMode.INSTANT_STREAMING ->
-                "Instant Streaming (~120ms response)"
-            SayItFlowCoordinator.AsrEngineMode.VOZ_OFFLINE -> when {
-                vozStatus.isInstalled ->
-                    if (isVozLoaded) "Loaded in RAM" else if (isVozWarming) "Warming up in RAM..." else "Installed (384 MB)"
-                vozStatus.isDownloading ->
-                    "Downloading ${vozStatus.downloadedBytes / (1024 * 1024)} / ${vozStatus.totalBytes / (1024 * 1024)} MB..."
-                vozStatus.errorMessage != null ->
-                    "Error: ${vozStatus.errorMessage}"
-                else ->
-                    "Download desert-ant-labs/voz (384 MB)"
-            }
+                "Google SODA Live + Whisper-Tiny INT8 Hybrid Ready"
         }
         ChecklistRow(
             stepNumber = "3",
             stepColor = AccentSky,
             title = "Speech-to-Text Engine",
             subtitle = engineSub,
-            isDone = isEngineReady,
-            actionLabel = if (vozStatus.isDownloading) "..." else "Download",
-            onAction = onDownloadVoz
+            isDone = true,
+            actionLabel = "Ready",
+            onAction = {}
         )
     }
 }
@@ -1066,12 +975,9 @@ private fun ChecklistRow(
 private fun VoiceDictationCard(
     isRecording: Boolean,
     isTranscribing: Boolean,
-    isVozWarming: Boolean,
-    isVozLoaded: Boolean,
     recordingElapsedMs: Long,
     waveformLevels: FloatArray,
-    peakAmplitude: Float,
-    triggerMode: SayItFlowCoordinator.TriggerMode,
+    livePartialText: String,
     scratchpadText: String,
     statusBannerText: String?,
     copiedScratchpad: Boolean,
@@ -1143,7 +1049,7 @@ private fun VoiceDictationCard(
                     )
                 }
                 Text(
-                    text = "Tap button below or hold Volume Down (0.5s) in any app",
+                    text = "Tap button below or hold Volume Down (0.4s) in any app",
                     color = InkSoft,
                     fontSize = 12.sp
                 )
@@ -1189,6 +1095,37 @@ private fun VoiceDictationCard(
                 levels = waveformLevels,
                 pulseAlpha = pulseAlpha
             )
+        }
+
+        // Live streaming / Whisper incremental preview while speaking
+        AnimatedVisibility(
+            visible = isRecording && livePartialText.isNotBlank(),
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(CardMint)
+                    .border(1.5.dp, Ink, RoundedCornerShape(10.dp))
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(7.dp)
+                        .clip(CircleShape)
+                        .background(AccentRed)
+                )
+                Text(
+                    text = livePartialText,
+                    color = Ink,
+                    fontSize = 12.5.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
 
         // Primary Monitor YT Coral-Red Pill CTA Button (.btn .btn-primary)
@@ -1378,7 +1315,7 @@ private fun VoiceDictationCard(
         ) {
             if (scratchpadText.isEmpty()) {
                 Text(
-                    text = "Tap 'Start Voice Dictation' above or hold Volume Down anywhere on your Pixel — your transcribed note lands right here...",
+                    text = "Tap 'Start Voice Dictation' above or hold Volume Down anywhere on your phone — your transcribed note lands right here...",
                     color = InkMuted,
                     fontSize = 13.sp,
                     lineHeight = 19.sp
@@ -1495,7 +1432,7 @@ private fun LanguageSelectorCard(
                     fontWeight = FontWeight.ExtraBold
                 )
                 Text(
-                    text = "Voz-0.6B multilingual FastConformer decoder",
+                    text = "OpenAI Whisper-Tiny INT8 multilingual + Roman Hinglish",
                     color = InkSoft,
                     fontSize = 12.sp
                 )
@@ -1639,7 +1576,7 @@ private fun FullHistoryCard(
                     fontWeight = FontWeight.ExtraBold
                 )
                 Text(
-                    text = "${records.size} transcripts stored locally on your Pixel",
+                    text = "${records.size} transcripts persisted locally on your phone",
                     color = InkSoft,
                     fontSize = 12.sp
                 )
@@ -1754,7 +1691,7 @@ private fun HistoryItemRow(
                     )
                 }
                 Text(
-                    text = "${record.elapsedMs}ms · ${timeFmt.format(Date(record.timestampMs))}",
+                    text = "⚡ ${record.elapsedMs}ms · ${timeFmt.format(Date(record.timestampMs))}",
                     color = InkSoft,
                     fontSize = 10.5.sp,
                     fontWeight = FontWeight.Bold,
@@ -1900,7 +1837,7 @@ private fun HardwareTriggerSettingsCard(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            listOf(400L to "400ms", 500L to "500ms (Default)", 650L to "650ms").forEach { (ms, label) ->
+            listOf(400L to "400ms (Fast)", 500L to "500ms", 650L to "650ms").forEach { (ms, label) ->
                 val isSelected = holdThresholdMs == ms
                 Box(
                     modifier = Modifier
@@ -1930,12 +1867,10 @@ private fun S1MiniSettingsCard(
     isEnabled: Boolean,
     selectedStyle: S1MiniEngine.Style,
     selectedStructure: S1MiniEngine.Structure,
-    customContext: String,
     activeForegroundPkg: String,
     onToggleEnabled: (Boolean) -> Unit,
     onSelectStyle: (S1MiniEngine.Style) -> Unit,
-    onSelectStructure: (S1MiniEngine.Structure) -> Unit,
-    onUpdateCustomContext: (String) -> Unit
+    onSelectStructure: (S1MiniEngine.Structure) -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -2073,12 +2008,8 @@ private fun S1MiniSettingsCard(
 @Composable
 private fun ModelManagementCard(
     asrEngineMode: SayItFlowCoordinator.AsrEngineMode,
-    vozStatus: ModelDownloadManager.ModelStatus,
-    isVozLoaded: Boolean,
-    isVozWarming: Boolean,
-    onSelectEngineMode: (SayItFlowCoordinator.AsrEngineMode) -> Unit,
-    onDownloadVoz: () -> Unit,
-    onWarmUpVoz: () -> Unit
+    isWhisperLoaded: Boolean,
+    onSelectEngineMode: (SayItFlowCoordinator.AsrEngineMode) -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -2092,16 +2023,35 @@ private fun ModelManagementCard(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text(
-            text = "Speech-to-Text Engine",
-            color = Ink,
-            fontSize = 15.5.sp,
-            fontWeight = FontWeight.ExtraBold
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Speech-to-Text Engine",
+                color = Ink,
+                fontSize = 15.5.sp,
+                fontWeight = FontWeight.ExtraBold
+            )
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(if (isWhisperLoaded) AccentTeal else AccentYellow)
+                    .border(1.5.dp, Ink, RoundedCornerShape(6.dp))
+                    .padding(horizontal = 8.dp, vertical = 3.dp)
+            ) {
+                Text(
+                    text = if (isWhisperLoaded) "WHISPER IN RAM" else "WARMING UP",
+                    color = Ink,
+                    fontSize = 9.5.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
+        }
 
-        SayItFlowCoordinator.AsrEngineMode.entries
-            .filter { it != SayItFlowCoordinator.AsrEngineMode.SENSE_VOICE_OFFLINE }
-            .forEach { mode ->
+        SayItFlowCoordinator.AsrEngineMode.entries.forEach { mode ->
             val selected = mode == asrEngineMode
             Row(
                 modifier = Modifier
@@ -2165,110 +2115,6 @@ private fun ModelManagementCard(
                             contentDescription = null,
                             tint = Ink,
                             modifier = Modifier.size(14.dp)
-                        )
-                    }
-                }
-            }
-        }
-
-        if (asrEngineMode == SayItFlowCoordinator.AsrEngineMode.VOZ_OFFLINE) {
-            HorizontalDivider(thickness = 1.5.dp, color = Ink.copy(alpha = 0.15f))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "desert-ant-labs/voz (0.6B FP16)",
-                        color = Ink,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                    Text(
-                        text = "384 MB FastConformer-TDT · 100% Offline",
-                        color = InkSoft,
-                        fontSize = 11.5.sp
-                    )
-                }
-
-                val badgeFill = if (isVozLoaded) AccentTeal else AccentYellow
-                val badgeText = when {
-                    isVozLoaded -> "IN RAM"
-                    isVozWarming -> "LOADING"
-                    vozStatus.isInstalled -> "ON DISK"
-                    else -> "MISSING"
-                }
-
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(badgeFill)
-                        .border(1.5.dp, Ink, RoundedCornerShape(6.dp))
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                ) {
-                    Text(
-                        text = badgeText,
-                        color = Ink,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontFamily = FontFamily.Monospace
-                    )
-                }
-            }
-
-            when {
-                vozStatus.isInstalled -> {
-                    if (!isVozLoaded) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .lofiPill(
-                                    backgroundColor = if (isVozWarming) AccentYellow else AccentRed,
-                                    borderWidth = 2.dp,
-                                    shadowOffset = 3.dp
-                                )
-                                .clickable(enabled = !isVozWarming) { onWarmUpVoz() }
-                                .padding(vertical = 10.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = if (isVozWarming) "Warming up ONNX Runtime..." else "Pre-Warm Model in RAM",
-                                color = if (isVozWarming) Ink else CardWhite,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.ExtraBold
-                            )
-                        }
-                    }
-                }
-                vozStatus.isDownloading -> {
-                    Text(
-                        text = "Downloading ${vozStatus.currentFile}: ${vozStatus.downloadedBytes / (1024 * 1024)} / ${vozStatus.totalBytes / (1024 * 1024)} MB (${(vozStatus.progressFraction * 100).toInt()}%)",
-                        color = Ink,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace
-                    )
-                }
-                else -> {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .lofiPill(
-                                backgroundColor = AccentRed,
-                                borderWidth = 2.dp,
-                                shadowOffset = 3.dp
-                            )
-                            .clickable { onDownloadVoz() }
-                            .padding(vertical = 10.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "Download Voz-0.6B Model (384 MB)",
-                            color = CardWhite,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.ExtraBold
                         )
                     }
                 }

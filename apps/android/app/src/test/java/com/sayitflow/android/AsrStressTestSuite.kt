@@ -272,4 +272,26 @@ class AsrStressTestSuite {
             assertTrue("Normalized audio must be within [-1.0, 1.0]", s >= -1.0f && s <= 1.0f)
         }
     }
+
+    @Test
+    fun testMoonshineRealSpeechOnnxInference() = runBlocking {
+        val wavFile = File("/tmp/moonshine_test/test.wav")
+        if (!wavFile.exists()) return@runBlocking
+        val rawBytes = wavFile.readBytes()
+        val pcmStart = 44.coerceAtMost(rawBytes.size)
+        val pcmBytes = rawBytes.copyOfRange(pcmStart, rawBytes.size)
+        val shorts = ShortArray(pcmBytes.size / 2)
+        ByteBuffer.wrap(pcmBytes).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().get(shorts)
+        val samples = FloatArray(shorts.size) { shorts[it] / 32768.0f }
+
+        val engine = SenseVoiceAsrEngine()
+        assertTrue("Moonshine model files should be detected", engine.hasMoonshineModel())
+        val t0 = System.currentTimeMillis()
+        val transcript = engine.transcribeWithMoonshine(samples)
+        val elapsed = System.currentTimeMillis() - t0
+        println("MOONSHINE REAL SPEECH TRANSCRIPT (${elapsed}ms): \"$transcript\"")
+        assertTrue("Moonshine transcript must not be blank, got '$transcript'", transcript.isNotBlank())
+        assertTrue("Moonshine transcript should contain expected speech words, got '$transcript'",
+            transcript.lowercase().contains("hello") || transcript.lowercase().contains("hear"))
+    }
 }

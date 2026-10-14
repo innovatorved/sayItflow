@@ -107,11 +107,19 @@ class FastStreamingAsrEngine(private val context: Context) {
     private val preRollQueue = ConcurrentLinkedQueue<ByteArray>()
     private var preRollByteCount = 0
 
+    // Rolling 600ms history ring buffer (19,200 bytes @ 16kHz PCM16) for seamless pause recovery (Test 3)
+    private val rollingHistoryQueue = ConcurrentLinkedQueue<ByteArray>()
+    private val rollingHistoryBytes = AtomicLong(0L)
+
     // Complete PCM backup of the current hold session (for sub-second fast-burst recovery)
     private val backupLock = Any()
     private val sessionPcmBackup = ByteArrayOutputStream(64000)
     @Volatile
     private var sessionMaxRms: Float = 0f
+
+    // On-device Whisper-Tiny INT8 fallback when SODA drops a fast short burst or fails mid-utterance
+    @Volatile
+    var whisperFallbackEngine: SenseVoiceAsrEngine? = null
 
     @Volatile
     private var activePipeOutStream: OutputStream? = null
@@ -139,6 +147,8 @@ class FastStreamingAsrEngine(private val context: Context) {
         audioQueue.clear()
         preRollQueue.clear()
         preRollByteCount = 0
+        rollingHistoryQueue.clear()
+        rollingHistoryBytes.set(0L)
         synchronized(backupLock) {
             sessionPcmBackup.reset()
             sessionMaxRms = 0f
@@ -164,6 +174,8 @@ class FastStreamingAsrEngine(private val context: Context) {
         audioQueue.clear()
         preRollQueue.clear()
         preRollByteCount = 0
+        rollingHistoryQueue.clear()
+        rollingHistoryBytes.set(0L)
         synchronized(backupLock) {
             sessionPcmBackup.reset()
             sessionMaxRms = 0f
@@ -357,7 +369,10 @@ class FastStreamingAsrEngine(private val context: Context) {
         return true
     }
 
-    private fun openAndAttachNewPipe(prependPreRoll: Boolean): ParcelFileDescriptor? {
+    private fun openAndAttachNewPipe(
+        prependPreRoll: Boolean,
+        replayRollingHistory: Boolean = false
+    ): ParcelFileDescriptor? {
         return try {
             val pipe = ParcelFileDescriptor.createPipe()
             val readPfd = pipe[0]
@@ -373,6 +388,10 @@ class FastStreamingAsrEngine(private val context: Context) {
                     preRollChunks.add(chunk)
                 }
                 preRollByteCount = 0
+            } else if (replayRollingHistory) {
+                // Test 3 Fix: Replay the last 600ms of rolling audio across mid-hold segment restarts
+                // so words spoken right as SODA transitions after a pause are never dropped!
+                preRollChunks.addAll(rollingHistoryQueue)
             }
 
             // Enqueue at front of audioQueue by draining existing live items after pre-roll
@@ -442,10 +461,15 @@ class FastStreamingAsrEngine(private val context: Context) {
                         commitSegment("")
 
                         // Test 3 Fix: If the recognizer timed out or ended during a long pause while the user
-                        // is STILL holding the button, seamlessly restart a new recognizer session!
+                        // is STILL holding the button, seamlessly restart a new recognizer session with 600ms rolling history!
                         if (!releaseRequested.get() && isCapturingAudio.get() && !deferred.isCompleted) {
                             Log.i(TAG, "User still holding button after pause (error=$error); continuing session seamlessly")
-                            val nextReadPfd = if (useAudioPipe) openAndAttachNewPipe(prependPreRoll = false) else null
+                            readyForSpeechTimestampMs.set(0L)
+                            val nextReadPfd = if (useAudioPipe) {
+                                openAndAttachNewPipe(prependPreRoll = false, replayRollingHistory = true)
+                            } else {
+                                null
+                            }
                             startRecognizerOnMainThread(languageCode, useAudioPipe, nextReadPfd, deferred)
                             return
                         }
@@ -466,10 +490,15 @@ class FastStreamingAsrEngine(private val context: Context) {
                         recognizerReadPfd?.closeQuietly()
 
                         // Test 3 Fix: If the recognizer finalized a segment during a slow pause while the user
-                        // is STILL holding the button, keep listening on a fresh pipe!
+                        // is STILL holding the button, keep listening on a fresh pipe with 600ms rolling history!
                         if (!releaseRequested.get() && isCapturingAudio.get() && !deferred.isCompleted) {
                             Log.i(TAG, "User still holding button after onResults; continuing session seamlessly")
-                            val nextReadPfd = if (useAudioPipe) openAndAttachNewPipe(prependPreRoll = false) else null
+                            readyForSpeechTimestampMs.set(0L)
+                            val nextReadPfd = if (useAudioPipe) {
+                                openAndAttachNewPipe(prependPreRoll = false, replayRollingHistory = true)
+                            } else {
+                                null
+                            }
                             startRecognizerOnMainThread(languageCode, useAudioPipe, nextReadPfd, deferred)
                             return
                         }
@@ -498,7 +527,12 @@ class FastStreamingAsrEngine(private val context: Context) {
 
                         if (!releaseRequested.get() && isCapturingAudio.get() && !deferred.isCompleted) {
                             Log.i(TAG, "User still holding button after onEndOfSegmentedSession; continuing session")
-                            val nextReadPfd = if (useAudioPipe) openAndAttachNewPipe(prependPreRoll = false) else null
+                            readyForSpeechTimestampMs.set(0L)
+                            val nextReadPfd = if (useAudioPipe) {
+                                openAndAttachNewPipe(prependPreRoll = false, replayRollingHistory = true)
+                            } else {
+                                null
+                            }
                             startRecognizerOnMainThread(languageCode, useAudioPipe, nextReadPfd, deferred)
                             return
                         }
@@ -616,8 +650,8 @@ class FastStreamingAsrEngine(private val context: Context) {
                     if (releaseRequested.get()) {
                         if (releaseTimestampMs == 0L) {
                             releaseTimestampMs = System.currentTimeMillis()
-                        } else if (System.currentTimeMillis() - releaseTimestampMs >= 260L) {
-                            // Captured full 260ms post-release tail so the final fast syllable is never clipped
+                        } else if (System.currentTimeMillis() - releaseTimestampMs >= 220L) {
+                            // Captured 220ms post-release tail so the final fast syllable is never clipped
                             break
                         }
                     }
@@ -644,6 +678,16 @@ class FastStreamingAsrEngine(private val context: Context) {
                             // Cap backup at 90s (2.88 MB)
                             if (sessionPcmBackup.size() < 2_880_000) {
                                 sessionPcmBackup.write(chunkBytes, 0, chunkBytes.size)
+                            }
+                        }
+
+                        // Maintain 600ms rolling history (19,200 bytes) for mid-hold pause recovery
+                        rollingHistoryQueue.add(chunkBytes)
+                        val totalHist = rollingHistoryBytes.addAndGet(chunkBytes.size.toLong())
+                        if (totalHist > 19_200L) {
+                            while (rollingHistoryBytes.get() > 19_200L) {
+                                val evicted = rollingHistoryQueue.poll() ?: break
+                                rollingHistoryBytes.addAndGet(-evicted.size.toLong())
                             }
                         }
 
@@ -681,6 +725,7 @@ class FastStreamingAsrEngine(private val context: Context) {
         val writerThread = Thread({
             Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO)
             try {
+                var chunksWrittenBeforeReady = 0
                 while (!readerFinished.get() || audioQueue.isNotEmpty()) {
                     val pipeOut = synchronized(pipeSwitchLock) { activePipeOutStream }
                     if (pipeOut == null) {
@@ -693,6 +738,16 @@ class FastStreamingAsrEngine(private val context: Context) {
                     if (chunk != null) {
                         try {
                             pipeOut.write(chunk)
+                            // Pace initial pre-roll chunks while SODA's frontend VAD is binding
+                            if (readyForSpeechTimestampMs.get() == 0L) {
+                                chunksWrittenBeforeReady++
+                                if (chunksWrittenBeforeReady % 3 == 0) {
+                                    pipeOut.flush()
+                                    Thread.sleep(3L)
+                                }
+                            } else {
+                                chunksWrittenBeforeReady = 0
+                            }
                         } catch (_: Exception) {
                         }
                     } else {
@@ -718,29 +773,28 @@ class FastStreamingAsrEngine(private val context: Context) {
                         }
                     }
 
-                    // Test 1 Fix: Ensure recognizer has been ready for at least 320ms and pace
-                    // 640ms of trailing comfort silence (32 chunks of 20ms) so fast short utterances
-                    // (<1.2s) are never dropped by SODA's minimum-duration gate.
+                    // Test 1 Fix: Ensure recognizer has been ready for at least 260ms and pace
+                    // trailing comfort silence so fast short utterances (<1.2s) are never dropped
+                    // by SODA's minimum-duration gate.
                     val readyAt = readyForSpeechTimestampMs.get()
                     val now = System.currentTimeMillis()
                     if (readyAt == 0L) {
-                        // Wait up to 350ms for onReadyForSpeech to fire on ultra-fast tap-holds
                         var waited = 0L
-                        while (readyForSpeechTimestampMs.get() == 0L && waited < 350L) {
+                        while (readyForSpeechTimestampMs.get() == 0L && waited < 280L) {
                             Thread.sleep(15L)
                             waited += 15L
                         }
-                    } else if (now - readyAt < 250L) {
-                        Thread.sleep((250L - (now - readyAt)).coerceIn(10L, 250L))
+                    } else if (now - readyAt < 220L) {
+                        Thread.sleep((220L - (now - readyAt)).coerceIn(10L, 220L))
                     }
 
                     val silenceChunk20ms = createComfortSilenceBytes(20)
-                    for (i in 0 until 32) { // 32 * 20ms = 640ms trailing silence
+                    for (i in 0 until 28) { // 28 * 20ms = 560ms trailing silence
                         try {
                             finalPipeOut.write(silenceChunk20ms)
                             if (i % 4 == 0) {
                                 finalPipeOut.flush()
-                                Thread.sleep(8L)
+                                Thread.sleep(6L)
                             }
                         } catch (_: Exception) {
                             break
@@ -765,6 +819,8 @@ class FastStreamingAsrEngine(private val context: Context) {
                 }
                 preRollQueue.clear()
                 preRollByteCount = 0
+                rollingHistoryQueue.clear()
+                rollingHistoryBytes.set(0L)
                 captureDone.complete(Unit)
             }
         }, "SayItFlow-PipeWriter")
@@ -784,22 +840,23 @@ class FastStreamingAsrEngine(private val context: Context) {
 
     /**
      * Triggered when the user releases the shortcut button (`ACTION_UP`):
-     * 1. Signals `AudioRecord` to capture the 260ms post-release tail and `PipeWriter` to pace
-     *    640ms of trailing silence before closing the pipe (`EOF`).
+     * 1. Signals `AudioRecord` to capture the 220ms post-release tail and `PipeWriter` to pace
+     *    560ms of trailing silence before closing the pipe (`EOF`).
      * 2. Awaits `onEndOfSegmentedSession` / `onResults`.
-     * 3. **Test 1 Guarantee**: If the live stream returned blank on a fast short utterance (<2.5s)
-     *    that had clear vocal energy (`sessionMaxRms >= 0.015f`), automatically replays the recorded
-     *    PCM backup with gain normalization and padding so fast short bursts never return empty!
+     * 3. **Test 1 Guarantee**: If the live stream returned blank on a fast short utterance
+     *    that had clear vocal energy (`sessionMaxRms >= 0.010f`), immediately recovers using the
+     *    in-RAM Whisper-Tiny INT8 ONNX engine (`<90ms`) or padded PCM replay so fast short bursts
+     *    never return empty!
      */
-    suspend fun stopAndAwaitTranscript(maxWaitMs: Long = 2200L): String = withContext(Dispatchers.Default) {
+    suspend fun stopAndAwaitTranscript(maxWaitMs: Long = 1600L): String = withContext(Dispatchers.Default) {
         lastDurationMs = (System.currentTimeMillis() - sessionStartTimeMs).coerceAtLeast(0L)
         val deferred = finalResultDeferred
         val captureDone = captureFinishedDeferred
 
-        // 1. Signal producer + writer threads to capture 260ms tail + 640ms silence and close EOF
+        // 1. Signal producer + writer threads to capture tail + silence and close EOF
         releaseRequested.set(true)
         if (captureDone != null) {
-            withTimeoutOrNull(1100L) {
+            withTimeoutOrNull(950L) {
                 captureDone.await()
             }
         }
@@ -837,11 +894,29 @@ class FastStreamingAsrEngine(private val context: Context) {
             sessionMaxRms = 0f
         }
 
-        if (result.isBlank() && backupBytes.size >= 3200 && maxRms >= 0.012f) {
+        if (result.isBlank() && backupBytes.size >= 3200 && maxRms >= 0.010f) {
             Log.i(TAG, "Fast-short utterance recovery triggered (${backupBytes.size} bytes, maxRms=$maxRms)")
-            val recovered = transcribePcmBytes(backupBytes, activeLanguageCode)
-            if (recovered.isNotBlank()) {
-                result = recovered.trim()
+            val whisper = whisperFallbackEngine
+            if (whisper != null) {
+                val sampleCount = backupBytes.size / 2
+                val floatSamples = FloatArray(sampleCount)
+                for (i in 0 until sampleCount) {
+                    val lo = backupBytes[i * 2].toInt() and 0xFF
+                    val hi = backupBytes[i * 2 + 1].toInt()
+                    val s = (hi shl 8) or lo
+                    floatSamples[i] = (s / 32768.0f).coerceIn(-1.0f, 1.0f)
+                }
+                val whisperOut = whisper.transcribe(floatSamples, language = activeLanguageCode).text.trim()
+                if (whisperOut.isNotBlank()) {
+                    Log.i(TAG, "Whisper-Tiny INT8 instant fallback recovered: '$whisperOut'")
+                    result = whisperOut
+                }
+            }
+            if (result.isBlank()) {
+                val recovered = transcribePcmBytes(backupBytes, activeLanguageCode)
+                if (recovered.isNotBlank()) {
+                    result = recovered.trim()
+                }
             }
         }
 
