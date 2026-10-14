@@ -1,0 +1,62 @@
+name: Android Build & Release (Pixel Edition)
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "apps/android/**"
+      - ".github/workflows/android.yml"
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  android:
+    name: Test & Build SayItFlow Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+          cache: "gradle"
+
+      - name: Run Unit Tests & Build Release APK
+        working-directory: apps/android
+        run: |
+          chmod +x ./gradlew
+          ./gradlew testDebugUnitTest assembleRelease --no-daemon
+          cp app/build/outputs/apk/release/app-release.apk SayItFlow-Pixel-arm64.apk
+          shasum -a 256 SayItFlow-Pixel-arm64.apk > SayItFlow-Pixel-arm64.apk.sha256
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SayItFlow-Pixel-arm64-apk
+          path: |
+            apps/android/SayItFlow-Pixel-arm64.apk
+            apps/android/SayItFlow-Pixel-arm64.apk.sha256
+
+      - name: Attach APK to GitHub Release (on tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        working-directory: apps/android
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          for i in 1 2 3 4 5; do
+            if gh release view "$TAG" >/dev/null 2>&1; then
+              gh release upload "$TAG" SayItFlow-Pixel-arm64.apk SayItFlow-Pixel-arm64.apk.sha256 --clobber
+              exit 0
+            fi
+            sleep 10
+          done
+          gh release create "$TAG" SayItFlow-Pixel-arm64.apk SayItFlow-Pixel-arm64.apk.sha256 --title "SayItFlow $TAG" --generate-notes

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SayItFlow</string>
+    <string name="accessibility_service_label">SayItFlow Push-to-Talk Dictation</string>
+    <string name="accessibility_service_description">Hold Volume Down (or Volume Up + Volume Down) anywhere on your Pixel to dictate with 100% on-device Desert Ant Voz + S1-mini and inject polished text directly into the active text field without switching keyboards.</string>
+</resources>
