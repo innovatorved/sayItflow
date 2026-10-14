@@ -297,8 +297,11 @@ final class AppState: ObservableObject {
     }
 
     var statusLabel: String {
-        if !Permissions.allGranted() { return "Permissions needed" }
-        if let lastError { return "Error" }
+        let granted = permissionStatuses.isEmpty
+            ? Permissions.allGranted()
+            : PermissionsLogic.allGranted(statuses: permissionStatuses)
+        if !granted { return "Permissions needed" }
+        if lastError != nil { return "Error" }
         switch phase {
         case .idle: return "Ready"
         case .recording: return "Listening…"
@@ -309,6 +312,10 @@ final class AppState: ObservableObject {
         }
     }
 
+    var didPassThroughInitialSpace: Bool {
+        hotkeyEngine?.didPassThroughInitialSpace == true
+    }
+
     var isHotkeyRunning: Bool { hotkeyEngine?.hasLiveTap == true }
     var isHotkeyHealthy: Bool { hotkeyEngine?.tapIsHealthy == true }
     var hotkeyTapDegraded: Bool {
@@ -316,8 +323,11 @@ final class AppState: ObservableObject {
         return engine.hasLiveTap && !engine.tapIsHealthy
     }
     var permissionsNeedAttention: Bool {
-        guard Permissions.allGranted() else { return false }
+        let granted = permissionStatuses.isEmpty
+            ? Permissions.allGranted()
+            : PermissionsLogic.allGranted(statuses: permissionStatuses)
+        guard granted else { return false }
         if hotkeyEngine?.hasLiveTap == true { return false }
-        return !Permissions.probeHotkeyTap()
+        return true
     }
 }

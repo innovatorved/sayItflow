@@ -9,7 +9,7 @@ enum HotkeyEvent: Sendable, Equatable {
     case pressEnded
 }
 
-/// CGEventTap runs on a dedicated thread; local NSEvent monitors on main.
+/// CGEventTap runs on a dedicated thread; Carbon hotkeys and local NSEvent monitors run on main.
 final class HotkeyEngine: @unchecked Sendable {
     private let handler: @Sendable (HotkeyEvent) -> Void
     private let onTapFailed: @Sendable (String) -> Void
@@ -28,7 +28,15 @@ final class HotkeyEngine: @unchecked Sendable {
     private var holdActivationWorkItem: DispatchWorkItem?
     private let timerQueue = DispatchQueue(label: "SayItFlow.HoldSpaceTimer", qos: .userInteractive)
 
+    private var carbonEventHandlerRef: EventHandlerRef?
+    private var carbonSpaceHotKeyRef: EventHotKeyRef?
+    private var isCarbonSpaceModeEnabled = false
+    private var isCustomShortcutEnabled = false
+    private var spaceReRegisterWorkItem: DispatchWorkItem?
+
     private static let spaceKeyCode: Int64 = 49
+    private static let carbonSpaceSignature: OSType = 0x5349_4648 // "SIFH"
+    private static let carbonSpaceHotKeyID: UInt32 = 1
 
     init(
         handler: @escaping @Sendable (HotkeyEvent) -> Void,
@@ -36,25 +44,54 @@ final class HotkeyEngine: @unchecked Sendable {
     ) {
         self.handler = handler
         self.onTapFailed = onTapFailed
+        performOnMain { [weak self] in
+            KeyboardShortcuts.disable(.pushToTalk)
+            KeyboardShortcuts.onKeyDown(for: .pushToTalk) { [weak self] in
+                guard let self else { return }
+                self.stateLock.lock()
+                let active = self.shouldRun && self.mode == .custom
+                self.stateLock.unlock()
+                if active {
+                    _ = self.beginPress()
+                }
+            }
+            KeyboardShortcuts.onKeyUp(for: .pushToTalk) { [weak self] in
+                guard let self else { return }
+                self.stateLock.lock()
+                let active = self.shouldRun && self.mode == .custom
+                self.stateLock.unlock()
+                if active {
+                    _ = self.endPress()
+                }
+            }
+        }
+    }
+
+    /// True only when the initial Space press was passed through to the target app before the 0.25s threshold.
+    /// When Carbon RegisterEventHotKey is active, WindowServer swallows the initial Space press, so no Backspace is needed.
+    var didPassThroughInitialSpace: Bool {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return !isCarbonSpaceModeEnabled
     }
 
     func updateMode(_ mode: HotkeyMode) {
         stateLock.lock()
         let previousMode = self.mode
         self.mode = mode
-        let needsRestart = tapThread != nil && Self.needsDefaultTap(previousMode) != Self.needsDefaultTap(mode)
         stateLock.unlock()
-        if needsRestart {
-            stop()
-            start()
-        }
-    }
 
-    /// Modifier-only modes use listenOnly; holdSpace/custom need defaultTap to consume events.
-    private static func needsDefaultTap(_ mode: HotkeyMode) -> Bool {
-        switch mode {
-        case .holdSpace, .custom: return true
-        case .rightOption, .fnKey: return false
+        if previousMode != mode {
+            performOnMain { [weak self] in
+                guard let self else { return }
+                self.clearSpaceHoldState()
+                _ = self.endPress()
+                self.syncCarbonHotkeysOnMain()
+            }
+        } else {
+            performOnMain { [weak self] in
+                self?.syncCarbonHotkeysOnMain()
+            }
         }
     }
 
@@ -75,7 +112,11 @@ final class HotkeyEngine: @unchecked Sendable {
     func start() {
         stateLock.lock()
         if tapThread != nil, eventTap != nil {
+            shouldRun = true
             stateLock.unlock()
+            performOnMain { [weak self] in
+                self?.syncCarbonHotkeysOnMain()
+            }
             return
         }
         if tapThread != nil {
@@ -88,6 +129,7 @@ final class HotkeyEngine: @unchecked Sendable {
 
         performOnMain { [weak self] in
             self?.installLocalMonitors()
+            self?.syncCarbonHotkeysOnMain()
         }
 
         let thread = Thread { [weak self] in
@@ -110,6 +152,7 @@ final class HotkeyEngine: @unchecked Sendable {
 
         performOnMain { [weak self] in
             self?.removeLocalMonitors()
+            self?.syncCarbonHotkeysOnMain()
         }
 
         if let runLoop {
@@ -145,6 +188,139 @@ final class HotkeyEngine: @unchecked Sendable {
         stateLock.unlock()
     }
 
+    // MARK: - Carbon Hotkeys (Hold Space & Custom Combo)
+
+    private func syncCarbonHotkeysOnMain() {
+        stateLock.lock()
+        let running = shouldRun
+        let currentMode = mode
+        stateLock.unlock()
+
+        let enableCustom = (running && currentMode == .custom)
+        if enableCustom {
+            KeyboardShortcuts.enable(.pushToTalk)
+        } else {
+            KeyboardShortcuts.disable(.pushToTalk)
+        }
+        stateLock.lock()
+        isCustomShortcutEnabled = enableCustom
+        stateLock.unlock()
+
+        if running && currentMode == .holdSpace {
+            installCarbonEventHandlerIfNeeded()
+            registerCarbonSpaceHotKey()
+            stateLock.lock()
+            isCarbonSpaceModeEnabled = (carbonSpaceHotKeyRef != nil)
+            stateLock.unlock()
+        } else {
+            spaceReRegisterWorkItem?.cancel()
+            spaceReRegisterWorkItem = nil
+            unregisterCarbonSpaceHotKey()
+            stateLock.lock()
+            isCarbonSpaceModeEnabled = false
+            stateLock.unlock()
+        }
+    }
+
+    private func installCarbonEventHandlerIfNeeded() {
+        guard carbonEventHandlerRef == nil else { return }
+        var eventTypes = [
+            EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed)),
+            EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyReleased)),
+        ]
+        let selfPtr = Unmanaged.passUnretained(self).toOpaque()
+        InstallEventHandler(
+            GetApplicationEventTarget(),
+            { _, event, userData -> OSStatus in
+                guard let event, let userData else { return OSStatus(eventNotHandledErr) }
+                let engine = Unmanaged<HotkeyEngine>.fromOpaque(userData).takeUnretainedValue()
+                return engine.handleCarbonHotKeyEvent(event)
+            },
+            eventTypes.count,
+            &eventTypes,
+            selfPtr,
+            &carbonEventHandlerRef
+        )
+    }
+
+    private func registerCarbonSpaceHotKey() {
+        guard carbonSpaceHotKeyRef == nil else { return }
+        let hotKeyID = EventHotKeyID(signature: Self.carbonSpaceSignature, id: Self.carbonSpaceHotKeyID)
+        var ref: EventHotKeyRef?
+        let status = RegisterEventHotKey(
+            UInt32(kVK_Space),
+            0,
+            hotKeyID,
+            GetApplicationEventTarget(),
+            0,
+            &ref
+        )
+        if status == noErr {
+            carbonSpaceHotKeyRef = ref
+        }
+    }
+
+    private func unregisterCarbonSpaceHotKey() {
+        if let ref = carbonSpaceHotKeyRef {
+            UnregisterEventHotKey(ref)
+            carbonSpaceHotKeyRef = nil
+        }
+    }
+
+    private func handleCarbonHotKeyEvent(_ event: EventRef) -> OSStatus {
+        var hotKeyID = EventHotKeyID()
+        let status = GetEventParameter(
+            event,
+            EventParamName(kEventParamDirectObject),
+            EventParamType(typeEventHotKeyID),
+            nil,
+            MemoryLayout<EventHotKeyID>.size,
+            nil,
+            &hotKeyID
+        )
+        guard status == noErr,
+              hotKeyID.signature == Self.carbonSpaceSignature,
+              hotKeyID.id == Self.carbonSpaceHotKeyID else {
+            return OSStatus(eventNotHandledErr)
+        }
+
+        stateLock.lock()
+        let active = shouldRun && mode == .holdSpace
+        stateLock.unlock()
+        guard active else { return noErr }
+
+        let kind = GetEventKind(event)
+        if kind == UInt32(kEventHotKeyPressed) {
+            _ = handleHoldSpaceKeyDown(isRepeat: false)
+        } else if kind == UInt32(kEventHotKeyReleased) {
+            let result = handleHoldSpaceKeyUp()
+            if !result.consume && !result.endDictation {
+                emitQuickTapSpaceOnMain()
+            }
+        }
+        return noErr
+    }
+
+    private func emitQuickTapSpaceOnMain() {
+        spaceReRegisterWorkItem?.cancel()
+        spaceReRegisterWorkItem = nil
+        unregisterCarbonSpaceHotKey()
+        MainActor.assumeIsolated {
+            _ = KeystrokeEmitter.postSpace()
+        }
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.stateLock.lock()
+            let active = self.shouldRun && self.mode == .holdSpace
+            self.stateLock.unlock()
+            if active {
+                self.registerCarbonSpaceHotKey()
+            }
+        }
+        spaceReRegisterWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.012, execute: work)
+    }
+
     // MARK: - Local monitor (in-app text fields, selects, etc.)
 
     private func performOnMain(_ work: () -> Void) {
@@ -152,14 +328,6 @@ final class HotkeyEngine: @unchecked Sendable {
             work()
         } else {
             DispatchQueue.main.sync(execute: work)
-        }
-    }
-
-    private func performOnMainAsync(_ work: @escaping () -> Void) {
-        if Thread.isMainThread {
-            work()
-        } else {
-            DispatchQueue.main.async(execute: work)
         }
     }
 
@@ -192,22 +360,28 @@ final class HotkeyEngine: @unchecked Sendable {
     }
 
     private func handleLocalEvent(_ event: NSEvent) -> NSEvent? {
-        if tapIsHealthy || KeystrokeEmitter.isSimulated(event) {
+        if KeystrokeEmitter.isSimulated(event) {
             return event
         }
         stateLock.lock()
         let currentMode = mode
+        let carbonSpaceActive = isCarbonSpaceModeEnabled
+        let customActive = isCustomShortcutEnabled
         stateLock.unlock()
 
         let consume: Bool
         switch currentMode {
         case .holdSpace:
+            if carbonSpaceActive { return event }
             consume = handleLocalHoldSpace(event)
         case .fnKey:
+            if tapIsHealthy { return event }
             consume = handleLocalFnKey(event)
         case .rightOption:
+            if tapIsHealthy { return event }
             consume = handleLocalRightOption(event)
         case .custom:
+            if customActive { return event }
             consume = handleLocalCustomCombo(event)
         }
         return consume ? nil : event
@@ -302,24 +476,30 @@ final class HotkeyEngine: @unchecked Sendable {
             | (1 << CGEventType.tapDisabledByTimeout.rawValue)
             | (1 << CGEventType.tapDisabledByUserInput.rawValue)
 
-        stateLock.lock()
-        let currentMode = mode
-        stateLock.unlock()
+        let callback: CGEventTapCallBack = { _, type, event, refcon in
+            guard let refcon else { return Unmanaged.passUnretained(event) }
+            let engine = Unmanaged<HotkeyEngine>.fromOpaque(refcon).takeUnretainedValue()
+            return engine.handleEvent(type: type, event: event)
+        }
+        let userInfo = Unmanaged.passUnretained(self).toOpaque()
 
-        let tapOptions: CGEventTapOptions = Self.needsDefaultTap(currentMode) ? .defaultTap : .listenOnly
-
-        guard let tap = CGEvent.tapCreate(
+        let tap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
             place: .headInsertEventTap,
-            options: tapOptions,
+            options: .defaultTap,
             eventsOfInterest: CGEventMask(mask),
-            callback: { _, type, event, refcon in
-                guard let refcon else { return Unmanaged.passUnretained(event) }
-                let engine = Unmanaged<HotkeyEngine>.fromOpaque(refcon).takeUnretainedValue()
-                return engine.handleEvent(type: type, event: event)
-            },
-            userInfo: Unmanaged.passUnretained(self).toOpaque()
-        ) else {
+            callback: callback,
+            userInfo: userInfo
+        ) ?? CGEvent.tapCreate(
+            tap: .cgSessionEventTap,
+            place: .headInsertEventTap,
+            options: .listenOnly,
+            eventsOfInterest: CGEventMask(mask),
+            callback: callback,
+            userInfo: userInfo
+        )
+
+        guard let tap else {
             stateLock.lock()
             shouldRun = false
             stateLock.unlock()
@@ -369,6 +549,7 @@ final class HotkeyEngine: @unchecked Sendable {
 
         stateLock.lock()
         let currentMode = mode
+        let carbonSpaceActive = isCarbonSpaceModeEnabled
         stateLock.unlock()
 
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
@@ -376,13 +557,16 @@ final class HotkeyEngine: @unchecked Sendable {
 
         switch currentMode {
         case .holdSpace:
+            if carbonSpaceActive {
+                return Unmanaged.passUnretained(event)
+            }
             return handleHoldSpace(type: type, keyCode: keyCode, flags: flags, event: event)
         case .fnKey:
             return handleFnKey(type: type, flags: flags, event: event)
         case .rightOption:
             return handleRightOption(type: type, flags: flags, event: event)
         case .custom:
-            return handleCustomCombo(type: type, keyCode: keyCode, flags: flags, event: event)
+            return Unmanaged.passUnretained(event)
         }
     }
 

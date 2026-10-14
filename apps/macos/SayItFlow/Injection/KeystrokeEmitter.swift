@@ -130,6 +130,23 @@ enum KeystrokeEmitter {
         postKey(keyCode: CGKeyCode(kVK_Delete), flags: [])
     }
 
+    @discardableResult
+    static func postSpace() -> Bool {
+        guard let source = CGEventSource(stateID: .hidSystemState) else { return false }
+        guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_Space), keyDown: true),
+              let keyUp = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_Space), keyDown: false) else {
+            return false
+        }
+        keyDown.flags = []
+        keyUp.flags = []
+        tag(keyDown)
+        tag(keyUp)
+        keyDown.post(tap: eventPostLocation)
+        usleep(1_000)
+        keyUp.post(tap: eventPostLocation)
+        return true
+    }
+
     /// Typing an empty string is a no-op, so an empty replacement has to delete.
     @discardableResult
     static func replaceSelection(with text: String) -> Bool {

@@ -115,9 +115,11 @@ final class DictationCoordinator {
         pinnedPID = frontApp?.processIdentifier
         let targetIcon = frontApp?.icon ?? NSApp.applicationIconImage
 
-        // In hold-space mode, the initial Space keyDown passed through before the 0.25s hold
-        // threshold elapsed. Remove that trailing space in focused text fields or Electron editors.
-        if AppSettings.shared.hotkeyMode == .holdSpace {
+        // In hold-space mode, if the initial Space keyDown passed through before the 0.25s hold
+        // threshold elapsed, remove that trailing space in focused text fields or Electron editors.
+        // When Carbon RegisterEventHotKey is active, WindowServer swallows the initial Space press.
+        if AppSettings.shared.hotkeyMode == .holdSpace,
+           appState?.didPassThroughInitialSpace == true {
             let preferPaste = InjectionTargetPolicy.prefersPaste(
                 bundleID: frontApp?.bundleIdentifier,
                 pid: pinnedPID
