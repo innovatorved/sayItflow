@@ -71,8 +71,11 @@ class SayItFlowCoordinator private constructor(context: Context) {
         }
 
         val SUPPORTED_LANGUAGES = listOf(
-            VozLanguage("auto", "Auto (25 Langs)", "✦"),
-            VozLanguage("en", "English", "EN"),
+            VozLanguage("hinglish", "Hinglish (EN+HI)", "IN"),
+            VozLanguage("auto", "Auto (25+ Langs)", "✦"),
+            VozLanguage("en-IN", "English (India)", "IN"),
+            VozLanguage("hi", "हिन्दी (Hindi)", "HI"),
+            VozLanguage("en", "English (US)", "EN"),
             VozLanguage("de", "Deutsch", "DE"),
             VozLanguage("fr", "Français", "FR"),
             VozLanguage("es", "Español", "ES"),

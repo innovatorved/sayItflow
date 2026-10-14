@@ -315,7 +315,7 @@ fun DashboardScreen(
                             statusBannerText = "No speech detected — speak clearly near the microphone."
                         } else {
                             val shouldPolish = isS1MiniEnabled &&
-                                (selectedLanguage == "auto" || selectedLanguage == "en")
+                                (selectedLanguage == "auto" || selectedLanguage == "en" || selectedLanguage == "en-IN" || selectedLanguage == "hinglish")
                             val finalOut = if (shouldPolish) {
                                 coordinator.s1MiniEngine.polish(
                                     rawTranscript = raw,

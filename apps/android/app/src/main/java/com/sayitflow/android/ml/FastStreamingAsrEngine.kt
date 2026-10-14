@@ -125,6 +125,9 @@ class FastStreamingAsrEngine(private val context: Context) {
         }
     }
 
+    @Volatile
+    private var activeLanguageCode: String = "auto"
+
     private fun buildCombinedTranscript(): String {
         val parts = mutableListOf<String>()
         synchronized(completedSegments) {
@@ -138,7 +141,12 @@ class FastStreamingAsrEngine(private val context: Context) {
                 parts.add(tail)
             }
         }
-        return parts.joinToString(" ").replace(Regex("\\s+"), " ").trim()
+        val joined = parts.joinToString(" ").replace(Regex("\\s+"), " ").trim()
+        return if (activeLanguageCode.equals("hinglish", ignoreCase = true)) {
+            transliterateDevanagariToHinglish(joined)
+        } else {
+            joined
+        }
     }
 
     /**
@@ -148,6 +156,7 @@ class FastStreamingAsrEngine(private val context: Context) {
     @SuppressLint("MissingPermission")
     fun startStreaming(languageCode: String = "auto"): Boolean {
         if (_isListening.value) return true
+        activeLanguageCode = languageCode
 
         val deferred = CompletableDeferred<String>()
         finalResultDeferred = deferred
@@ -285,6 +294,10 @@ class FastStreamingAsrEngine(private val context: Context) {
                     override fun onEvent(eventType: Int, params: Bundle?) {}
                 })
 
+                val isHinglish = languageCode.equals("hinglish", ignoreCase = true)
+                val isIndianLocale = isHinglish ||
+                    languageCode.equals("en-IN", ignoreCase = true) ||
+                    languageCode.equals("hi", ignoreCase = true)
                 val localeTag = resolveLocaleTag(languageCode)
 
                 val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
@@ -296,7 +309,22 @@ class FastStreamingAsrEngine(private val context: Context) {
                     putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE, localeTag)
                     putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, context.packageName)
-                    putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+                    // For Hinglish / Indian English / Hindi, allow hybrid online+offline S3/SODA recognizer
+                    // which has native bilingual code-mixed Hinglish support (and auto-falls back to SODA offline).
+                    putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, !isIndianLocale)
+
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
+                        (isHinglish || languageCode.equals("auto", ignoreCase = true))
+                    ) {
+                        putExtra(
+                            RecognizerIntent.EXTRA_ENABLE_LANGUAGE_SWITCH,
+                            RecognizerIntent.LANGUAGE_SWITCH_QUICK_RESPONSE
+                        )
+                        putStringArrayListExtra(
+                            RecognizerIntent.EXTRA_LANGUAGE_SWITCH_ALLOWED_LANGUAGES,
+                            arrayListOf("en-IN", "hi-IN", "en-US")
+                        )
+                    }
 
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && recognizerReadPfd != null) {
                         putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE, recognizerReadPfd)
@@ -532,6 +560,8 @@ class FastStreamingAsrEngine(private val context: Context) {
     private fun resolveLocaleTag(languageCode: String): String {
         return when (languageCode.lowercase()) {
             "auto", "" -> Locale.getDefault().toLanguageTag()
+            "hinglish", "en-in" -> "en-IN"
+            "hi" -> "hi-IN"
             "en" -> "en-US"
             "de" -> "de-DE"
             "fr" -> "fr-FR"
@@ -559,6 +589,125 @@ class FastStreamingAsrEngine(private val context: Context) {
             "et" -> "et-EE"
             else -> languageCode
         }
+    }
+
+    /**
+     * Converts any Devanagari words into conversational Roman Hinglish (with natural Hindi schwa
+     * deletion and high-frequency word dictionary) while leaving Latin/English words untouched.
+     */
+    private fun transliterateDevanagariToHinglish(input: String): String {
+        if (!input.any { it in '\u0900'..'\u097F' }) return input
+
+        val commonWords = mapOf(
+            "मैं" to "main", "मेरा" to "mera", "मेरी" to "meri", "मेरे" to "mere",
+            "तुम" to "tum", "तुम्हारा" to "tumhara", "आप" to "aap", "आपका" to "aapka",
+            "हम" to "hum", "हमारा" to "hamara", "यह" to "yeh", "वह" to "woh",
+            "ये" to "ye", "वो" to "wo", "क्या" to "kya", "क्यों" to "kyun",
+            "कब" to "kab", "कहाँ" to "kahan", "कहां" to "kahan", "कैसे" to "kaise",
+            "कैसा" to "kaisa", "कैसी" to "kaisi", "कौन" to "kaun", "कितना" to "kitna",
+            "कितने" to "kitne", "है" to "hai", "हैं" to "hain", "था" to "tha",
+            "थी" to "thi", "थे" to "the", "हो" to "ho", "हूँ" to "hoon", "हूं" to "hoon",
+            "नहीं" to "nahi", "ना" to "na", "मत" to "mat", "हाँ" to "haan", "हां" to "haan",
+            "भाई" to "bhai", "यार" to "yaar", "दोस्त" to "dost", "कल" to "kal",
+            "आज" to "aaj", "परसों" to "parson", "अभी" to "abhi", "अब" to "ab",
+            "फिर" to "phir", "भी" to "bhi", "तो" to "toh", "ही" to "hi",
+            "से" to "se", "में" to "mein", "पर" to "par", "पे" to "pe",
+            "को" to "ko", "का" to "ka", "की" to "ki", "के" to "ke",
+            "और" to "aur", "या" to "ya", "लेकिन" to "lekin", "मगर" to "magar",
+            "अगर" to "agar", "क्योंकि" to "kyunki", "इसलिए" to "isliye",
+            "ठीक" to "theek", "अच्छा" to "achha", "बहुत" to "bahut", "थोड़ा" to "thoda",
+            "ज्यादा" to "zyada", "ज़्यादा" to "zyada", "कम" to "kam", "सब" to "sab",
+            "कुछ" to "kuch", "कोई" to "koi", "कर" to "kar", "करो" to "karo",
+            "करना" to "karna", "किया" to "kiya", "रहा" to "raha", "रही" to "rahi",
+            "रहे" to "rahe", "गया" to "gaya", "गई" to "gayi", "गए" to "gaye",
+            "आया" to "aaya", "आओ" to "aao", "जाओ" to "jao", "चलो" to "chalo",
+            "मिलते" to "milte", "बजे" to "baje", "बात" to "baat", "काम" to "kaam",
+            "घर" to "ghar", "समय" to "samay", "टाइम" to "time", "पता" to "pata",
+            "मुझे" to "mujhe", "तुझे" to "tujhe", "उसे" to "use", "हमें" to "humein",
+            "आपको" to "aapko", "मेरेको" to "mereko", "तेरेको" to "tereko"
+        )
+
+        return input.split(" ").joinToString(" ") { token ->
+            val clean = token.trim(',', '.', '?', '!', ';', ':')
+            val suffix = token.substring(clean.length)
+            if (!clean.any { it in '\u0900'..'\u097F' }) {
+                token
+            } else {
+                val mapped = commonWords[clean] ?: phoneticDevanagariToRoman(clean)
+                mapped + suffix
+            }
+        }
+    }
+
+    private fun phoneticDevanagariToRoman(word: String): String {
+        val vowels = mapOf(
+            'अ' to "a", 'आ' to "aa", 'इ' to "i", 'ई' to "ee", 'उ' to "u", 'ऊ' to "oo",
+            'ए' to "e", 'ऐ' to "ai", 'ओ' to "o", 'औ' to "au", 'ऋ' to "ri"
+        )
+        val matras = mapOf(
+            'ा' to "a", 'ि' to "i", 'ी' to "i", 'ु' to "u", 'ू' to "oo",
+            'े' to "e", 'ै' to "ai", 'ो' to "o", 'ौ' to "au", 'ृ' to "ri"
+        )
+        val consonants = mapOf(
+            'क' to "k", 'ख' to "kh", 'ग' to "g", 'घ' to "gh", 'ङ' to "n",
+            'च' to "ch", 'छ' to "chh", 'ज' to "j", 'झ' to "jh", 'ञ' to "n",
+            'ट' to "t", 'ठ' to "th", 'ड' to "d", 'ढ' to "dh", 'ण' to "n",
+            'त' to "t", 'थ' to "th", 'द' to "d", 'ध' to "dh", 'न' to "n",
+            'प' to "p", 'फ' to "ph", 'ब' to "b", 'भ' to "bh", 'म' to "m",
+            'य' to "y", 'र' to "r", 'ल' to "l", 'व' to "v",
+            'श' to "sh", 'ष' to "sh", 'स' to "s", 'ह' to "h",
+            '\u095C' to "r", '\u095D' to "rh", '\u0958' to "q",
+            '\u0959' to "kh", '\u095A' to "gh", '\u095B' to "z", '\u095E' to "f"
+        )
+
+        val sb = StringBuilder()
+        var i = 0
+        while (i < word.length) {
+            val ch = word[i]
+            when {
+                vowels.containsKey(ch) -> sb.append(vowels[ch])
+                consonants.containsKey(ch) -> {
+                    var step = 0
+                    val hasNukta = (i + 1 < word.length && word[i + 1] == '\u093C')
+                    val base = if (hasNukta) {
+                        step = 1
+                        when (ch) {
+                            'ड' -> "r"
+                            'ढ' -> "rh"
+                            'क' -> "q"
+                            'ख' -> "kh"
+                            'ग' -> "gh"
+                            'ज' -> "z"
+                            'फ' -> "f"
+                            else -> consonants[ch] ?: ""
+                        }
+                    } else {
+                        consonants[ch] ?: ""
+                    }
+                    sb.append(base)
+                    i += step
+                    val next = if (i + 1 < word.length) word[i + 1] else null
+                    when {
+                        next == '्' -> i++ // Halant suppresses inherent 'a'
+                        next != null && matras.containsKey(next) -> {
+                            sb.append(matras[next])
+                            i++
+                        }
+                        next == null -> {
+                            // Word-final schwa deletion in conversational Hindi (e.g. कल -> kal, not kala)
+                        }
+                        else -> sb.append("a")
+                    }
+                }
+                matras.containsKey(ch) -> sb.append(matras[ch])
+                ch == 'ं' || ch == 'ँ' -> sb.append("n")
+                ch == 'ः' -> sb.append("h")
+                ch == '।' -> sb.append(".")
+                ch != '्' && ch != '\u093C' -> sb.append(ch)
+            }
+            i++
+        }
+        return sb.toString()
     }
 
     private fun ParcelFileDescriptor.closeQuietly() {

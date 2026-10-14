@@ -268,7 +268,7 @@ class SayItFlowAccessibilityService : AccessibilityService() {
 
                     val selectedLang = coordinator.selectedLanguage.value
                     val shouldPolish = coordinator.s1MiniEnabled.value &&
-                        (selectedLang == "auto" || selectedLang == "en")
+                        (selectedLang == "auto" || selectedLang == "en" || selectedLang == "en-IN" || selectedLang == "hinglish")
 
                     val finalText = if (shouldPolish) {
                         coordinator.s1MiniEngine.polish(
