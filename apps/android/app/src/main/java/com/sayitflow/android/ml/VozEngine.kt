@@ -4,6 +4,7 @@ import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
 import android.content.Context
+import android.os.Process
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -18,7 +19,10 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.nio.FloatBuffer
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
@@ -30,15 +34,21 @@ import kotlin.math.pow
  * - Uses `web/encoder.onnx` + `web/encoder.onnx.data` (FP16 weights, fused mel frontend)
  * - Uses `web/decoder.onnx` (`reducesInGraph = true`, outputs `tok`, `dur`, `h_out`, `c_out`)
  * - Uses `web/embedding.f16` (`[8193, 640]` widened once to float32 on load)
- * - Automatically unloads ONNX sessions and embedding tables after 2 minutes of idle silence
- *   so background RAM & battery footprint drop to near zero.
+ * - Uses zero-copy Direct `FloatBuffer`s, `NO_OPT` (avoiding slow naive `Gemm`), 4 big-core threads,
+ *   and `THREAD_PRIORITY_URGENT_DISPLAY` scheduling for maximum speed on Pixel Tensor G2.
  */
 class VozEngine(private val context: Context) {
 
     companion object {
         private const val TAG = "VozEngine"
-        const val IDLE_UNLOAD_DELAY_MS = 120_000L // 2 minutes auto-unload
+        const val IDLE_UNLOAD_DELAY_MS = 1_800_000L // Keep warm in RAM for 30 minutes of inactivity
         const val KEY_BIAS_MASK = -40000.0f // Float16-representable -infinity
+
+        private fun allocateDirectFloatBuffer(floatCount: Int): FloatBuffer {
+            return ByteBuffer.allocateDirect(floatCount * 4)
+                .order(ByteOrder.nativeOrder())
+                .asFloatBuffer()
+        }
 
         /**
          * Mel frames that hold audio. NeMo's centered STFT gives `samples / hop + 1`.
@@ -117,8 +127,20 @@ class VozEngine(private val context: Context) {
     private var vocabulary: List<String> = emptyList()
     private var embeddingTable: FloatArray = FloatArray(0)
 
+    // Pre-allocated zero-copy Direct FloatBuffers & scratch arrays (initialized on load)
+    private var directAudioRows: FloatBuffer? = null
+    private var directMelMask: FloatBuffer? = null
+    private var directKeyBias: FloatBuffer? = null
+    private var reusableEncProj: FloatArray = FloatArray(0)
+
     private val _isLoaded = MutableStateFlow(false)
     val isLoaded: StateFlow<Boolean> = _isLoaded.asStateFlow()
+
+    private val _isWarmingUp = MutableStateFlow(false)
+    val isWarmingUp: StateFlow<Boolean> = _isWarmingUp.asStateFlow()
+
+    private val _lastLoadMs = MutableStateFlow(0L)
+    val lastLoadMs: StateFlow<Long> = _lastLoadMs.asStateFlow()
 
     val modelDirectory: File
         get() = File(context.filesDir, "models/desert-ant-voz")
@@ -134,7 +156,7 @@ class VozEngine(private val context: Context) {
     }
 
     /**
-     * Pre-warms `desert-ant-labs/voz` in the background while the user is holding the hardware button.
+     * Pre-warms `desert-ant-labs/voz` in the background so dictation starts with 0ms model-load latency.
      */
     fun warmUpAsync() {
         scope.launch {
@@ -151,50 +173,77 @@ class VozEngine(private val context: Context) {
         if (_isLoaded.value && encoderSession != null && decoderSession != null) {
             return@withLock
         }
-        withContext(Dispatchers.IO) {
-            val dir = modelDirectory
-            require(areModelFilesInstalled()) {
-                "Desert Ant Voz model files are not yet downloaded in ${dir.absolutePath}"
+        _isWarmingUp.value = true
+        try {
+            withContext(Dispatchers.IO) {
+                val dir = modelDirectory
+                require(areModelFilesInstalled()) {
+                    "Desert Ant Voz model files are not yet downloaded in ${dir.absolutePath}"
+                }
+
+                val t0 = System.currentTimeMillis()
+                val metaJson = File(dir, "meta.json").readText()
+                val config = VozConfiguration.fromJson(metaJson)
+                val vocabJson = File(dir, "vocab.json").readText()
+                val vocab = VozWords.parseVocabulary(vocabJson)
+                require(vocab.size >= config.vocabSize) {
+                    "Vocabulary size ${vocab.size} < ${config.vocabSize}"
+                }
+
+                val embBytes = File(dir, "embedding.f16").readBytes()
+                val expectedElements = (config.vocabSize + 1) * config.predHidden
+                val embTable = VozWords.decodeFloat16Embedding(embBytes, expectedElements)
+
+                val env = OrtEnvironment.getEnvironment()
+                val sessionOptions = OrtSession.SessionOptions().apply {
+                    // Desert Ant Labs (`voz.js`): graphOptimizationLevel: "disabled" (NO_OPT) is deliberate
+                    // because ONNX Runtime's MatMul+Add->Gemm fusion emits a naive kernel on this encoder.
+                    setOptimizationLevel(OrtSession.SessionOptions.OptLevel.NO_OPT)
+                    // Pixel 7a (Tensor G2) has 4 performance cores (2x Cortex-X1 + 2x Cortex-A78).
+                    // Using 4 intra-op threads keeps execution off the 4 slow in-order Cortex-A55 cores.
+                    setIntraOpNumThreads(4)
+                    setInterOpNumThreads(1)
+                    // Avoid 350 MB duplicate CPU arena allocation so Android does not swap process to ZRAM.
+                    setCPUArenaAllocator(false)
+                    setMemoryPatternOptimization(false)
+                    runCatching {
+                        addConfigEntry("session.intra_op.allow_spinning", "1")
+                    }
+                }
+
+                val encSession = env.createSession(File(dir, "encoder.onnx").absolutePath, sessionOptions)
+                val decSession = env.createSession(File(dir, "decoder.onnx").absolutePath, sessionOptions)
+
+                directAudioRows = allocateDirectFloatBuffer(config.hopLength * config.nRows)
+                directMelMask = allocateDirectFloatBuffer(config.validFrames)
+                directKeyBias = allocateDirectFloatBuffer(config.encFrames)
+                reusableEncProj = FloatArray(config.jointHidden * config.encFrames)
+
+                ortEnv = env
+                encoderSession = encSession
+                decoderSession = decSession
+                configuration = config
+                vocabulary = vocab
+                embeddingTable = embTable
+
+                // Warm up decoder threadpool & JNI buffers with a 1-frame pass
+                runCatching {
+                    runDecoderWindow(env, decSession, reusableEncProj, 1, config)
+                }
+
+                val elapsed = System.currentTimeMillis() - t0
+                _lastLoadMs.value = elapsed
+                _isLoaded.value = true
+
+                Log.i(TAG, "Loaded & warmed desert-ant-labs/voz in $elapsed ms")
             }
-
-            val t0 = System.currentTimeMillis()
-            val metaJson = File(dir, "meta.json").readText()
-            val config = VozConfiguration.fromJson(metaJson)
-            val vocabJson = File(dir, "vocab.json").readText()
-            val vocab = VozWords.parseVocabulary(vocabJson)
-            require(vocab.size >= config.vocabSize) {
-                "Vocabulary size ${vocab.size} < ${config.vocabSize}"
-            }
-
-            val embBytes = File(dir, "embedding.f16").readBytes()
-            val expectedElements = (config.vocabSize + 1) * config.predHidden
-            val embTable = VozWords.decodeFloat16Embedding(embBytes, expectedElements)
-
-            val env = OrtEnvironment.getEnvironment()
-            val sessionOptions = OrtSession.SessionOptions().apply {
-                setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
-                // Use 4 performance cores on Google Pixel Tensor
-                setIntraOpNumThreads(4)
-            }
-
-            // Passing the File path allows ONNX Runtime to resolve `encoder.onnx.data` in the same directory
-            val encSession = env.createSession(File(dir, "encoder.onnx").absolutePath, sessionOptions)
-            val decSession = env.createSession(File(dir, "decoder.onnx").absolutePath, sessionOptions)
-
-            ortEnv = env
-            encoderSession = encSession
-            decoderSession = decSession
-            configuration = config
-            vocabulary = vocab
-            embeddingTable = embTable
-            _isLoaded.value = true
-
-            Log.i(TAG, "Loaded desert-ant-labs/voz in ${System.currentTimeMillis() - t0} ms")
+        } finally {
+            _isWarmingUp.value = false
         }
     }
 
     /**
-     * Unloads ONNX sessions and embedding buffers from RAM after 2 minutes of inactivity.
+     * Unloads ONNX sessions and embedding buffers from RAM after 30 minutes of inactivity.
      */
     suspend fun unloadModels() = engineMutex.withLock {
         idleUnloadJob?.cancel()
@@ -208,11 +257,15 @@ class VozEngine(private val context: Context) {
         }
         encoderSession = null
         decoderSession = null
+        directAudioRows = null
+        directMelMask = null
+        directKeyBias = null
+        reusableEncProj = FloatArray(0)
         vocabulary = emptyList()
         embeddingTable = FloatArray(0)
         _isLoaded.value = false
         System.gc()
-        Log.i(TAG, "Auto-unloaded desert-ant-labs/voz after 2 minutes idle — 0 MB ML RAM used.")
+        Log.i(TAG, "Auto-unloaded desert-ant-labs/voz after idle — 0 MB ML RAM used.")
     }
 
     private fun resetIdleUnloadTimerLocked() {
@@ -233,13 +286,31 @@ class VozEngine(private val context: Context) {
         return engineMutex.withLock {
             resetIdleUnloadTimerLocked()
             withContext(Dispatchers.Default) {
-                val c = configuration
-                val env = requireNotNull(ortEnv)
-                val enc = requireNotNull(encoderSession)
-                val dec = requireNotNull(decoderSession)
+                val prevPriority = runCatching {
+                    val tid = Process.myTid()
+                    val old = Process.getThreadPriority(tid)
+                    Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_DISPLAY)
+                    old
+                }.getOrDefault(Process.THREAD_PRIORITY_DEFAULT)
+                try {
+                    val c = configuration
+                    val env = requireNotNull(ortEnv)
+                    val enc = requireNotNull(encoderSession)
+                    val dec = requireNotNull(decoderSession)
+
+                // Add a small 160ms right-context silence pad if utterance is short (< 2.5s)
+                // so FastConformer's 8x subsampling has clean trailing context frames.
+                val preparedSamples = if (samples.size < (c.sampleRate * 5) / 2) {
+                    val padSamples = (c.sampleRate * 0.16).toInt()
+                    FloatArray(min(c.nSamples, samples.size + padSamples)).also { padded ->
+                        System.arraycopy(samples, 0, padded, 0, min(samples.size, padded.size))
+                    }
+                } else {
+                    samples
+                }
 
                 val secondsPerEncoderFrame = (c.hopLength * 8).toDouble() / c.sampleRate.toDouble()
-                val windows = sliceWindows(samples, c)
+                val windows = sliceWindows(preparedSamples, c)
                 var mergedWords = emptyList<VozWords.TimedWord>()
                 var prevWindowEndSec = 0.0
 
@@ -247,23 +318,23 @@ class VozEngine(private val context: Context) {
                     val windowStartSec = windowStartSample.toDouble() / c.sampleRate.toDouble()
                     val windowEndSec = (windowStartSample + windowSlice.size).toDouble() / c.sampleRate.toDouble()
 
-                    val encProj = runEncoderWindow(env, enc, windowSlice, c)
-                    val validEncFrames = validEncoderFrames(windowSlice.size, c)
-                    val (tokens, frames, ends) = runDecoderWindow(
-                        env = env,
-                        dec = dec,
-                        encProj = encProj,
-                        validFrames = validEncFrames,
-                        c = c
-                    )
+                    val tEnc0 = System.currentTimeMillis()
+                    val decoded = transcribeSingleWindow(env, enc, dec, windowSlice, c)
+                    val tEnc1 = System.currentTimeMillis()
 
                     val windowWords = VozWords.assembleWords(
-                        tokens = tokens,
-                        frames = frames,
-                        ends = ends,
+                        tokens = decoded.tokens,
+                        frames = decoded.frames,
+                        ends = decoded.ends,
                         windowStartSeconds = windowStartSec,
                         secondsPerEncoderFrame = secondsPerEncoderFrame,
                         vocabulary = vocabulary
+                    )
+
+                    Log.i(
+                        TAG,
+                        "Window [${String.format("%.2f", windowStartSec)}s..${String.format("%.2f", windowEndSec)}s] " +
+                            "transcribed in ${tEnc1 - tEnc0}ms -> ${decoded.tokens.size} tokens (${windowWords.size} words)"
                     )
 
                     mergedWords = if (mergedWords.isEmpty()) {
@@ -282,9 +353,39 @@ class VozEngine(private val context: Context) {
                     prevWindowEndSec = windowEndSec
                 }
 
-                mergedWords.joinToString(" ") { it.text }.trim()
+                    val finalTranscript = mergedWords.joinToString(" ") { it.text }.trim()
+                    Log.i(TAG, "Final transcript: \"$finalTranscript\"")
+                    finalTranscript
+                } finally {
+                    runCatching {
+                        Process.setThreadPriority(prevPriority)
+                    }
+                }
             }
         }
+    }
+
+    private fun transcribeSingleWindow(
+        env: OrtEnvironment,
+        enc: OrtSession,
+        dec: OrtSession,
+        windowSlice: FloatArray,
+        c: VozConfiguration
+    ): DecodeWindowOutput {
+        val t0 = System.currentTimeMillis()
+        val encProj = runEncoderWindow(env, enc, windowSlice, c)
+        val t1 = System.currentTimeMillis()
+        val validEncFrames = validEncoderFrames(windowSlice.size, c)
+        val out = runDecoderWindow(
+            env = env,
+            dec = dec,
+            encProj = encProj,
+            validFrames = validEncFrames,
+            c = c
+        )
+        val t2 = System.currentTimeMillis()
+        Log.i(TAG, "Voz timing: encoder=${t1 - t0}ms, decoder=${t2 - t1}ms (validFrames=$validEncFrames, tokens=${out.tokens.size})")
+        return out
     }
 
     /**
@@ -349,9 +450,25 @@ class VozEngine(private val context: Context) {
         val melMaskShape = longArrayOf(1L, 1L, 1L, c.validFrames.toLong())
         val keyBiasShape = longArrayOf(1L, c.encFrames.toLong(), 1L, 1L)
 
-        OnnxTensor.createTensor(env, FloatBuffer.wrap(staged.audioRows), rowsShape).use { rowsTensor ->
-            OnnxTensor.createTensor(env, FloatBuffer.wrap(staged.melMask), melMaskShape).use { maskTensor ->
-                OnnxTensor.createTensor(env, FloatBuffer.wrap(staged.keyBias), keyBiasShape).use { biasTensor ->
+        val rowsBuf = (directAudioRows ?: allocateDirectFloatBuffer(staged.audioRows.size)).apply {
+            clear()
+            put(staged.audioRows)
+            rewind()
+        }
+        val maskBuf = (directMelMask ?: allocateDirectFloatBuffer(staged.melMask.size)).apply {
+            clear()
+            put(staged.melMask)
+            rewind()
+        }
+        val biasBuf = (directKeyBias ?: allocateDirectFloatBuffer(staged.keyBias.size)).apply {
+            clear()
+            put(staged.keyBias)
+            rewind()
+        }
+
+        OnnxTensor.createTensor(env, rowsBuf, rowsShape).use { rowsTensor ->
+            OnnxTensor.createTensor(env, maskBuf, melMaskShape).use { maskTensor ->
+                OnnxTensor.createTensor(env, biasBuf, keyBiasShape).use { biasTensor ->
                     val inputs = mapOf(
                         "audio_rows" to rowsTensor,
                         "mel_mask" to maskTensor,
@@ -360,7 +477,12 @@ class VozEngine(private val context: Context) {
                     encSession.run(inputs).use { result ->
                         val outTensor = result[0] as OnnxTensor
                         val fb = outTensor.floatBuffer
-                        val out = FloatArray(c.jointHidden * c.encFrames)
+                        val expectedSize = c.jointHidden * c.encFrames
+                        val out = if (reusableEncProj.size == expectedSize) {
+                            reusableEncProj
+                        } else {
+                            FloatArray(expectedSize).also { reusableEncProj = it }
+                        }
                         fb.get(out)
                         return out
                     }
@@ -389,28 +511,42 @@ class VozEngine(private val context: Context) {
         val blank = c.blankIdx
         val limit = max(1, min(total, validFrames))
 
+        val declaredLanes = (dec.inputInfo["embed"]?.info as? ai.onnxruntime.TensorInfo)
+            ?.shape?.firstOrNull()?.toInt() ?: c.decodeLanes
+        val lanes = if (declaredLanes > 0) declaredLanes else max(1, c.decodeLanes)
+
         var position = 0
         var label = blank
         var emitted = 0
 
-        val hIn = FloatArray(hidden)
-        val cIn = FloatArray(hidden)
-        val embed = FloatArray(c.predHidden)
-        val encStep = FloatArray(joint * width)
+        val hIn = FloatArray(lanes * hidden)
+        val cIn = FloatArray(lanes * hidden)
+        val hOutBuf = FloatArray(hidden)
+        val cOutBuf = FloatArray(hidden)
+        val embed = FloatArray(lanes * c.predHidden)
+        val encStep = FloatArray(lanes * joint * width)
+
+        val embedDirect = allocateDirectFloatBuffer(embed.size)
+        val hInDirect = allocateDirectFloatBuffer(hIn.size)
+        val cInDirect = allocateDirectFloatBuffer(cIn.size)
+        val encStepDirect = allocateDirectFloatBuffer(encStep.size)
 
         val tokens = ArrayList<Int>(64)
         val frames = ArrayList<Int>(64)
         val ends = ArrayList<Int>(64)
 
-        val embedShape = longArrayOf(1L, c.predHidden.toLong(), 1L, 1L)
-        val stateShape = longArrayOf(1L, hidden.toLong(), 1L, 1L)
-        val stepShape = longArrayOf(1L, joint.toLong(), 1L, width.toLong())
+        val embedShape = longArrayOf(lanes.toLong(), c.predHidden.toLong(), 1L, 1L)
+        val stateShape = longArrayOf(lanes.toLong(), hidden.toLong(), 1L, 1L)
+        val stepShape = longArrayOf(lanes.toLong(), joint.toLong(), 1L, width.toLong())
+        val maxDecodeSteps = limit + 48
+        var decodeSteps = 0
 
-        while (position < limit) {
-            // 1. Copy embedding row for `label`
+        while (position < limit && decodeSteps < maxDecodeSteps) {
+            decodeSteps++
+            // 1. Copy embedding row for `label` into lane 0
             System.arraycopy(embeddingTable, label * c.predHidden, embed, 0, c.predHidden)
 
-            // 2. Gather `span` encoder frames across all `joint` channels
+            // 2. Gather `span` encoder frames across all `joint` channels for lane 0
             val span = min(width, limit - position)
             for (channel in 0 until joint) {
                 val dstBase = channel * width
@@ -423,18 +559,21 @@ class VozEngine(private val context: Context) {
                 }
             }
 
-            // 3. Run single-lane TDT decode step (`reducesInGraph = true`)
+            // 3. Stage into zero-copy Direct FloatBuffers & run TDT decode step (`reducesInGraph = true`)
+            embedDirect.clear(); embedDirect.put(embed); embedDirect.rewind()
+            hInDirect.clear(); hInDirect.put(hIn); hInDirect.rewind()
+            cInDirect.clear(); cInDirect.put(cIn); cInDirect.rewind()
+            encStepDirect.clear(); encStepDirect.put(encStep); encStepDirect.rewind()
+
             var tok0 = blank
             var tok1 = blank
             var dur0 = 0
             var dur1 = 0
-            val hOutBuf = FloatArray(hidden)
-            val cOutBuf = FloatArray(hidden)
 
-            OnnxTensor.createTensor(env, FloatBuffer.wrap(embed), embedShape).use { embedTensor ->
-                OnnxTensor.createTensor(env, FloatBuffer.wrap(hIn), stateShape).use { hInTensor ->
-                    OnnxTensor.createTensor(env, FloatBuffer.wrap(cIn), stateShape).use { cInTensor ->
-                        OnnxTensor.createTensor(env, FloatBuffer.wrap(encStep), stepShape).use { stepTensor ->
+            OnnxTensor.createTensor(env, embedDirect, embedShape).use { embedTensor ->
+                OnnxTensor.createTensor(env, hInDirect, stateShape).use { hInTensor ->
+                    OnnxTensor.createTensor(env, cInDirect, stateShape).use { cInTensor ->
+                        OnnxTensor.createTensor(env, encStepDirect, stepShape).use { stepTensor ->
                             val inputs = mapOf(
                                 "embed" to embedTensor,
                                 "h_in" to hInTensor,
@@ -454,8 +593,8 @@ class VozEngine(private val context: Context) {
                                 dur0 = durIb.get(0)
                                 if (width > 1 && durIb.remaining() > 1) dur1 = durIb.get(1)
 
-                                hOutTensor.floatBuffer.get(hOutBuf)
-                                cOutTensor.floatBuffer.get(cOutBuf)
+                                hOutTensor.floatBuffer.get(hOutBuf, 0, hidden)
+                                cOutTensor.floatBuffer.get(cOutBuf, 0, hidden)
                             }
                         }
                     }
@@ -479,8 +618,8 @@ class VozEngine(private val context: Context) {
                     label = bestTok
                     emitted += 1
                     var step = duration
-                    // TDT may predict a zero duration; force progress after 10 emissions on one frame
-                    if (step == 0 && emitted >= 10) {
+                    // TDT may predict a zero duration; force progress after 3 emissions on one frame
+                    if (step == 0 && emitted >= 3) {
                         step = 1
                         emitted = 0
                     }
@@ -503,19 +642,11 @@ class VozEngine(private val context: Context) {
         )
     }
 
-    // =========================================================================
-    // Exact Frontend Framing & Masking from `Desert-Ant-Labs/desert-ant-core`
-    // =========================================================================
-
     data class StagedFrontend(
         val audioRows: FloatArray,
         val melMask: FloatArray,
         val keyBias: FloatArray
     )
 
-    /**
-     * Mel frames that hold audio. NeMo's centered STFT gives `samples / hop + 1`.
-     */
     fun validMelFrames(sampleCount: Int, c: VozConfiguration): Int = Companion.validMelFrames(sampleCount, c)
 }
-

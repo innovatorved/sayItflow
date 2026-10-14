@@ -25,9 +25,9 @@ import kotlinx.coroutines.launch
 /**
  * System-wide Accessibility Service for Google Pixel:
  * 1. Intercepts hardware Volume button holds (`Volume Down`, `Volume Up`, or `Volume Up + Down` chord)
- * 2. Pre-warms `desert-ant-labs/voz` as soon as the button is pressed
- * 3. Captures 16 kHz mono PCM while held & displays the Monochrome Studio waveform pill
- * 4. Transcribes with `desert-ant-labs/voz` + polishes with `S1-mini` (App-Aware Context)
+ * 2. Keeps `desert-ant-labs/voz` warm in RAM on service connection and button press
+ * 3. Captures 16 kHz mono PCM while held & displays the Ved Gupta Monochrome waveform pill
+ * 4. Transcribes with `desert-ant-labs/voz` + polishes with instant `S1-mini` (App-Aware Context)
  * 5. Injects text directly into the active text input without switching away from Gboard!
  */
 class SayItFlowAccessibilityService : AccessibilityService() {
@@ -38,10 +38,12 @@ class SayItFlowAccessibilityService : AccessibilityService() {
     private lateinit var coordinator: SayItFlowCoordinator
     private lateinit var overlayPill: OverlayPillController
     private var waveformCollectorJob: Job? = null
+    private var streamingWaveformJob: Job? = null
 
     private var volDownPressed = false
     private var volUpPressed = false
     private var holdTriggered = false
+    private var activeSessionStreaming = false
     private var holdRunnable: Runnable? = null
     private var currentForegroundPackage: String = ""
 
@@ -51,9 +53,22 @@ class SayItFlowAccessibilityService : AccessibilityService() {
         overlayPill = OverlayPillController(this)
         coordinator.setAccessibilityConnected(true)
 
+        if (coordinator.asrEngineMode.value == SayItFlowCoordinator.AsrEngineMode.VOZ_OFFLINE &&
+            coordinator.vozEngine.areModelFilesInstalled()
+        ) {
+            coordinator.vozEngine.warmUpAsync()
+        }
+
         waveformCollectorJob = serviceScope.launch {
             coordinator.audioCapture.waveformLevels.collect { levels ->
                 if (coordinator.audioCapture.isRecording.value) {
+                    overlayPill.updateWaveform(levels)
+                }
+            }
+        }
+        streamingWaveformJob = serviceScope.launch {
+            coordinator.fastStreamingEngine.waveformLevels.collect { levels ->
+                if (coordinator.fastStreamingEngine.isListening.value) {
                     overlayPill.updateWaveform(levels)
                 }
             }
@@ -62,8 +77,11 @@ class SayItFlowAccessibilityService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         val pkg = event?.packageName?.toString()
-        if (!pkg.isNullOrBlank() && pkg != packageName) {
+        if (!pkg.isNullOrBlank() && !pkg.contains("systemui", ignoreCase = true)) {
             currentForegroundPackage = pkg
+            if (::coordinator.isInitialized) {
+                coordinator.setActiveForegroundPackage(pkg)
+            }
         }
     }
 
@@ -72,9 +90,14 @@ class SayItFlowAccessibilityService : AccessibilityService() {
     }
 
     override fun onDestroy() {
-        coordinator.setAccessibilityConnected(false)
-        overlayPill.hide()
+        if (::coordinator.isInitialized) {
+            coordinator.setAccessibilityConnected(false)
+        }
+        if (::overlayPill.isInitialized) {
+            overlayPill.hide()
+        }
         waveformCollectorJob?.cancel()
+        streamingWaveformJob?.cancel()
         serviceScope.cancel()
         super.onDestroy()
     }
@@ -88,25 +111,25 @@ class SayItFlowAccessibilityService : AccessibilityService() {
         val mode = coordinator.triggerMode.value
         val holdDelayMs = coordinator.holdThresholdMs.value
 
-        when (mode) {
+        return when (mode) {
             SayItFlowCoordinator.TriggerMode.HOLD_VOLUME_DOWN -> {
-                if (keyCode != KeyEvent.KEYCODE_VOLUME_DOWN) return false
-                return handleSingleButtonHold(
+                if (keyCode != KeyEvent.KEYCODE_VOLUME_DOWN) false
+                else handleSingleButtonHold(
                     event = event,
                     adjustDirection = AudioManager.ADJUST_LOWER,
                     holdDelayMs = holdDelayMs
                 )
             }
             SayItFlowCoordinator.TriggerMode.HOLD_VOLUME_UP -> {
-                if (keyCode != KeyEvent.KEYCODE_VOLUME_UP) return false
-                return handleSingleButtonHold(
+                if (keyCode != KeyEvent.KEYCODE_VOLUME_UP) false
+                else handleSingleButtonHold(
                     event = event,
                     adjustDirection = AudioManager.ADJUST_RAISE,
                     holdDelayMs = holdDelayMs
                 )
             }
             SayItFlowCoordinator.TriggerMode.VOLUME_CHORD -> {
-                return handleVolumeChord(event)
+                handleVolumeChord(event)
             }
         }
     }
@@ -120,8 +143,11 @@ class SayItFlowAccessibilityService : AccessibilityService() {
             KeyEvent.ACTION_DOWN -> {
                 if (event.repeatCount == 0) {
                     holdTriggered = false
-                    // Pre-warm desert-ant-labs/voz immediately while the user's finger is pressing
-                    coordinator.vozEngine.warmUpAsync()
+                    if (coordinator.asrEngineMode.value == SayItFlowCoordinator.AsrEngineMode.VOZ_OFFLINE &&
+                        coordinator.vozEngine.areModelFilesInstalled()
+                    ) {
+                        coordinator.vozEngine.warmUpAsync()
+                    }
                     val runnable = Runnable {
                         holdTriggered = true
                         startDictationSession()
@@ -138,7 +164,7 @@ class SayItFlowAccessibilityService : AccessibilityService() {
                     holdTriggered = false
                     finishDictationSession()
                 } else {
-                    // Short tap (< 280ms): forward normal volume adjustment
+                    // Short tap (< threshold): forward normal volume adjustment
                     val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
                     audioManager.adjustStreamVolume(
                         AudioManager.STREAM_MUSIC,
@@ -159,7 +185,11 @@ class SayItFlowAccessibilityService : AccessibilityService() {
                 if (event.keyCode == KeyEvent.KEYCODE_VOLUME_UP) volUpPressed = true
                 if (volDownPressed && volUpPressed && !holdTriggered) {
                     holdTriggered = true
-                    coordinator.vozEngine.warmUpAsync()
+                    if (coordinator.asrEngineMode.value == SayItFlowCoordinator.AsrEngineMode.VOZ_OFFLINE &&
+                        coordinator.vozEngine.areModelFilesInstalled()
+                    ) {
+                        coordinator.vozEngine.warmUpAsync()
+                    }
                     startDictationSession()
                     return true
                 }
@@ -180,40 +210,119 @@ class SayItFlowAccessibilityService : AccessibilityService() {
     }
 
     private fun startDictationSession() {
-        if (!coordinator.vozEngine.areModelFilesInstalled()) {
-            triggerHaptic(isStart = false)
-            overlayPill.showMessageAndAutoDismiss("Download Desert Ant Voz in SayItFlow first", 2000L)
+        val useStreaming =
+            coordinator.asrEngineMode.value == SayItFlowCoordinator.AsrEngineMode.INSTANT_STREAMING &&
+                coordinator.fastStreamingEngine.isAvailable()
+
+        if (useStreaming) {
+            activeSessionStreaming = true
+            overlayPill.showListening(currentForegroundPackage)
+            val started = coordinator.fastStreamingEngine.startStreaming(
+                languageCode = coordinator.selectedLanguage.value
+            )
+            if (started) {
+                triggerHaptic(isStart = true)
+            } else {
+                overlayPill.hide()
+            }
             return
         }
+
+        activeSessionStreaming = false
+        if (!coordinator.vozEngine.areModelFilesInstalled()) {
+            triggerHaptic(isStart = false)
+            overlayPill.hide()
+            return
+        }
+        // Attach overlay first so Android 14+ AudioFlinger sees an active Accessibility Overlay window
+        overlayPill.showListening(currentForegroundPackage)
         val started = coordinator.audioCapture.startRecording()
         if (started) {
             triggerHaptic(isStart = true)
-            overlayPill.showListening()
         } else {
-            overlayPill.showMessageAndAutoDismiss("Grant Microphone permission in SayItFlow", 2000L)
+            overlayPill.hide()
         }
     }
 
-    private fun finishDictationSession() {
+    private fun finishDictationSession(ignoreShortTap: Boolean = true) {
+        if (activeSessionStreaming) {
+            activeSessionStreaming = false
+            triggerHaptic(isStart = false)
+            val targetPkg = currentForegroundPackage
+
+            serviceScope.launch {
+                val t0 = System.currentTimeMillis()
+                try {
+                    val rawText = coordinator.fastStreamingEngine.stopAndAwaitTranscript(maxWaitMs = 200L)
+                    overlayPill.hide()
+
+                    if (rawText.isBlank()) {
+                        return@launch
+                    }
+
+                    val selectedLang = coordinator.selectedLanguage.value
+                    val shouldPolish = coordinator.s1MiniEnabled.value &&
+                        (selectedLang == "auto" || selectedLang == "en")
+
+                    val finalText = if (shouldPolish) {
+                        coordinator.s1MiniEngine.polish(
+                            rawTranscript = rawText,
+                            foregroundPackage = targetPkg,
+                            style = coordinator.s1Style.value,
+                            structure = coordinator.s1Structure.value,
+                            customContext = coordinator.s1CustomContext.value
+                        )
+                    } else {
+                        rawText
+                    }
+
+                    val elapsed = (System.currentTimeMillis() - t0).coerceAtLeast(1L)
+                    coordinator.recordDictation(
+                        SayItFlowCoordinator.DictationRecord(
+                            rawTranscript = rawText,
+                            polishedTranscript = finalText,
+                            targetPackage = targetPkg.ifBlank { "System" },
+                            elapsedMs = elapsed
+                        )
+                    )
+
+                    val injected = injectTextIntoActiveField(finalText)
+                    if (!injected) {
+                        copyToClipboard(finalText)
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("SayItFlowService", "Streaming dictation failed", e)
+                    overlayPill.hide()
+                }
+            }
+            return
+        }
+
         if (!coordinator.audioCapture.isRecording.value) return
         val samples = coordinator.audioCapture.stopRecording()
+        val rawMs = coordinator.audioCapture.lastRawDurationMs
         triggerHaptic(isStart = false)
 
-        // Ignore ultra-short accidental taps (< 180 ms = 2,880 samples at 16 kHz)
-        if (samples.size < 2880) {
+        // Ignore ultra-short accidental releases (< 200 ms after hold threshold)
+        if (ignoreShortTap && rawMs < 200L) {
+            overlayPill.hide()
+            return
+        }
+        if (samples.size < 1600) {
             overlayPill.hide()
             return
         }
 
-        overlayPill.showTranscribing()
+        val isCold = !coordinator.vozEngine.isLoaded.value
+        overlayPill.showTranscribing(isColdWarmUp = isCold)
         val targetPkg = currentForegroundPackage
 
         serviceScope.launch {
             val t0 = System.currentTimeMillis()
             try {
                 val rawText = coordinator.vozEngine.transcribe(samples)
+                overlayPill.hide()
                 if (rawText.isBlank()) {
-                    overlayPill.hide()
                     return@launch
                 }
 
@@ -244,14 +353,12 @@ class SayItFlowAccessibilityService : AccessibilityService() {
                 )
 
                 val injected = injectTextIntoActiveField(finalText)
-                if (injected) {
-                    overlayPill.showMessageAndAutoDismiss("Injected ✓", 850L)
-                } else {
+                if (!injected) {
                     copyToClipboard(finalText)
-                    overlayPill.showMessageAndAutoDismiss("Copied to clipboard ✓", 1200L)
                 }
             } catch (e: Exception) {
-                overlayPill.showMessageAndAutoDismiss("Error: ${e.localizedMessage ?: "Failed"}", 1800L)
+                android.util.Log.e("SayItFlowService", "Dictation failed", e)
+                overlayPill.hide()
             }
         }
     }
@@ -260,15 +367,56 @@ class SayItFlowAccessibilityService : AccessibilityService() {
         holdRunnable?.let { mainHandler.removeCallbacks(it) }
         holdRunnable = null
         holdTriggered = false
-        if (coordinator.audioCapture.isRecording.value) {
-            coordinator.audioCapture.stopRecording()
+        activeSessionStreaming = false
+        if (::coordinator.isInitialized) {
+            if (coordinator.audioCapture.isRecording.value) {
+                coordinator.audioCapture.stopRecording()
+            }
+            if (coordinator.fastStreamingEngine.isListening.value) {
+                coordinator.fastStreamingEngine.cancel()
+            }
         }
-        overlayPill.hide()
+        if (::overlayPill.isInitialized) {
+            overlayPill.hide()
+        }
+    }
+
+    /**
+     * Known chat/input placeholder strings exposed by WhatsApp, Messages, Telegram, Instagram,
+     * Slack, Discord, and Gboard when an input box is actually empty.
+     */
+    private fun isPlaceholderText(targetNode: AccessibilityNodeInfo, existing: String): Boolean {
+        if (existing.isEmpty()) return true
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            if (targetNode.isShowingHintText) return true
+            val hint = targetNode.hintText?.toString().orEmpty()
+            if (hint.isNotEmpty() && existing.equals(hint, ignoreCase = true)) return true
+        }
+        // In WhatsApp, Google Messages, Telegram, etc., an empty input often reports selection < 0
+        // or 0 while exposing "Message" or "Type a message" as node.text without setting hintText.
+        val normalized = existing.trim().lowercase()
+        val isKnownPlaceholder = normalized == "message" ||
+            normalized == "message..." ||
+            normalized == "type a message" ||
+            normalized == "type a message..." ||
+            normalized == "write a message" ||
+            normalized == "write a message..." ||
+            normalized == "send a message" ||
+            normalized == "text message" ||
+            normalized == "rcs message" ||
+            normalized == "reply" ||
+            normalized == "add a comment..." ||
+            normalized == "search" ||
+            normalized == "search or type url" ||
+            normalized == "ask anything"
+
+        return isKnownPlaceholder && targetNode.textSelectionStart <= 0
     }
 
     /**
      * Injects dictated text directly into the currently focused editable `AccessibilityNodeInfo`
-     * at the cursor position without switching keyboards.
+     * at the cursor position without switching keyboards, and ensures placeholder hints like
+     * "Message" are never prepended.
      */
     private fun injectTextIntoActiveField(textToInsert: String): Boolean {
         val root = rootInActiveWindow ?: return false
@@ -280,15 +428,8 @@ class SayItFlowAccessibilityService : AccessibilityService() {
             return pasteViaClipboard(targetNode, textToInsert)
         }
 
-        val existingCharSeq = targetNode.text
-        val existing = existingCharSeq?.toString().orEmpty()
-        // Note: When `existingCharSeq` is equal to the field's hint text on Android, treat existing as empty
-        val hint = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            targetNode.hintText?.toString().orEmpty()
-        } else {
-            ""
-        }
-        val actualExisting = if (existing.isNotEmpty() && existing == hint) "" else existing
+        val existing = targetNode.text?.toString().orEmpty()
+        val actualExisting = if (isPlaceholderText(targetNode, existing)) "" else existing
 
         val selStart = targetNode.textSelectionStart.takeIf { it in 0..actualExisting.length }
             ?: actualExisting.length

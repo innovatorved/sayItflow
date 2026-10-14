@@ -10,12 +10,13 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
 import com.sayitflow.android.ui.DashboardScreen
 
 class MainActivity : ComponentActivity() {
@@ -24,6 +25,15 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        @Suppress("DEPRECATION")
+        window.statusBarColor = android.graphics.Color.parseColor("#FBF3E4")
+        @Suppress("DEPRECATION")
+        window.navigationBarColor = android.graphics.Color.parseColor("#FBF3E4")
+        WindowCompat.getInsetsController(window, window.decorView)?.apply {
+            isAppearanceLightStatusBars = true
+            isAppearanceLightNavigationBars = true
+        }
+
         val coordinator = SayItFlowCoordinator.getInstance(this)
         refreshPermissions(coordinator)
 
@@ -35,10 +45,14 @@ class MainActivity : ComponentActivity() {
             }
 
             MaterialTheme(
-                colorScheme = darkColorScheme(
-                    primary = Color(0xFFFAFAFA),
-                    background = Color(0xFF09090B),
-                    surface = Color(0xFF121215)
+                colorScheme = lightColorScheme(
+                    primary = Color(0xFFFF3B2F),
+                    onPrimary = Color(0xFFFFFFFF),
+                    secondary = Color(0xFF36C2AD),
+                    background = Color(0xFFFBF3E4),
+                    surface = Color(0xFFFFFFFF),
+                    onBackground = Color(0xFF1B1712),
+                    onSurface = Color(0xFF1B1712)
                 )
             ) {
                 DashboardScreen(
@@ -60,6 +74,9 @@ class MainActivity : ComponentActivity() {
         val coordinator = SayItFlowCoordinator.getInstance(this)
         refreshPermissions(coordinator)
         coordinator.downloadManager.refreshStatus()
+        if (coordinator.vozEngine.areModelFilesInstalled()) {
+            coordinator.vozEngine.warmUpAsync()
+        }
     }
 
     private fun refreshPermissions(coordinator: SayItFlowCoordinator) {

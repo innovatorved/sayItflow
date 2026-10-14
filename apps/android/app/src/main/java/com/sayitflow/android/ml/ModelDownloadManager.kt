@@ -74,6 +74,13 @@ class ModelDownloadManager(private val context: Context) {
     val s1Status: StateFlow<ModelStatus> = _s1Status.asStateFlow()
 
     init {
+        // Clean up any partial/unneeded 461 MB GGUF file since Android uses the built-in 0 MB instant engine
+        if (s1Dir.exists()) {
+            try {
+                s1Dir.deleteRecursively()
+            } catch (_: Exception) {
+            }
+        }
         refreshStatus()
     }
 
@@ -97,18 +104,12 @@ class ModelDownloadManager(private val context: Context) {
             totalBytes = VOZ_TOTAL_BYTES
         )
 
-        val s1File = File(s1Dir, "s1-mini-q4_k_m.gguf")
-        val s1Part = File(s1Dir, "s1-mini-q4_k_m.gguf.part")
-        val s1Installed = s1File.exists() && s1File.length() > 100_000_000L
-        val s1Bytes = when {
-            s1Installed -> s1File.length()
-            s1Part.exists() -> s1Part.length()
-            else -> 0L
-        }
-        _s1Status.value = _s1Status.value.copy(
-            isInstalled = s1Installed,
-            downloadedBytes = s1Bytes,
-            totalBytes = S1_MINI_TOTAL_BYTES
+        _s1Status.value = ModelStatus(
+            isInstalled = true,
+            isDownloading = false,
+            downloadedBytes = 0L,
+            totalBytes = 0L,
+            currentFile = "Built-In Instant Core"
         )
     }
 

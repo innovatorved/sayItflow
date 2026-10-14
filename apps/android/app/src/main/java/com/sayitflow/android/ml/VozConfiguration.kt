@@ -23,6 +23,7 @@ data class VozConfiguration(
     val blankIdx: Int = 8192,
     val durations: IntArray = intArrayOf(0, 1, 2, 3, 4),
     val decodeWidth: Int = 2,
+    val decodeLanes: Int = 16,
     val fusedFrontend: Boolean = true,
     val encoderExternal: String = "encoder.onnx.data"
 ) {
@@ -63,6 +64,7 @@ data class VozConfiguration(
                 blankIdx = obj.optInt("blank_idx", 8192),
                 durations = durations,
                 decodeWidth = obj.optInt("decode_width", 2),
+                decodeLanes = obj.optInt("decode_lanes", 16),
                 fusedFrontend = obj.optBoolean("fused_frontend", true),
                 encoderExternal = obj.optString("encoder_external", "encoder.onnx.data")
             ).also { it.validate() }

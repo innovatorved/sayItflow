@@ -1,187 +1,149 @@
 package com.sayitflow.android.service
 
+import android.animation.ValueAnimator
 import android.content.Context
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Paint
 import android.graphics.PixelFormat
-import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
+import android.graphics.RectF
 import android.os.Handler
 import android.os.Looper
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
-import android.widget.LinearLayout
-import android.widget.TextView
-import com.sayitflow.android.audio.AudioCaptureManager
+import android.view.animation.DecelerateInterpolator
+import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.sin
 
 /**
- * Renders the signature SayItFlow Monochrome Studio floating pill at the top of the screen
- * during push-to-talk dictation using `TYPE_ACCESSIBILITY_OVERLAY`.
+ * Minimal, Text-Free Bottom Floating Waveform Pill (`TYPE_ACCESSIBILITY_OVERLAY`).
+ *
+ * - Appears ONLY when triggered via the hardware shortcut (never stays on screen when idle).
+ * - Contains ZERO text — purely a compact `96dp × 28dp` Lo-Fi Paper & Ink capsule (`#FBF3E4`
+ *   surface, `1.8dp` `#1B1712` border, `2.2dp` hard shadow) at the bottom center with a
+ *   status indicator dot + 9 smooth acoustic waveform bars.
+ * - Automatically disappears (`hide()`) as soon as dictation completes.
  */
-class OverlayPillController(private val serviceContext: Context) {
+class OverlayPillController(
+    private val serviceContext: Context
+) {
+
+    enum class HudMode {
+        LISTENING,
+        TRANSCRIBING,
+        COMPLETE,
+        ALERT
+    }
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val windowManager = serviceContext.getSystemService(Context.WINDOW_SERVICE) as WindowManager
 
-    private var pillContainer: LinearLayout? = null
-    private var statusDot: View? = null
-    private var statusText: TextView? = null
-    private val barViews = ArrayList<View>(AudioCaptureManager.WAVEFORM_BARS)
+    private var capsuleView: MinimalWaveformPillView? = null
     private var isAdded = false
+    private var dismissRunnable: Runnable? = null
 
-    fun showListening() {
+    fun showListening(foregroundPackage: String = "") {
         mainHandler.post {
-            ensurePillAttached()
-            statusDot?.background = circleDrawable(Color.parseColor("#FAFAFA"))
-            statusText?.text = "Listening"
+            cancelPendingDismiss()
+            val view = ensureAttached()
+            view.setMode(HudMode.LISTENING)
         }
     }
 
     fun updateWaveform(levels: FloatArray) {
         mainHandler.post {
-            if (!isAdded || barViews.isEmpty()) return@post
-            for (i in 0 until minOf(levels.size, barViews.size)) {
-                val bar = barViews[i]
-                val heightDp = 4f + (levels[i].coerceIn(0.1f, 1.0f) * 14f)
-                val lp = bar.layoutParams as LinearLayout.LayoutParams
-                lp.height = dpToPx(heightDp)
-                bar.layoutParams = lp
-            }
+            if (!isAdded) return@post
+            capsuleView?.updateAudioLevels(levels)
         }
     }
 
-    fun showTranscribing() {
+    fun showTranscribing(isColdWarmUp: Boolean = false) {
         mainHandler.post {
-            ensurePillAttached()
-            statusDot?.background = circleDrawable(Color.parseColor("#A1A1AA"))
-            statusText?.text = "Voz + S1-mini..."
-            for (bar in barViews) {
-                val lp = bar.layoutParams as LinearLayout.LayoutParams
-                lp.height = dpToPx(6f)
-                bar.layoutParams = lp
-            }
+            cancelPendingDismiss()
+            val view = ensureAttached()
+            view.setMode(HudMode.TRANSCRIBING)
         }
     }
 
-    fun showMessageAndAutoDismiss(message: String, durationMs: Long = 1100L) {
+    fun showMessageAndAutoDismiss(
+        message: String = "",
+        subtitle: String = "",
+        isError: Boolean = false,
+        durationMs: Long = 380L
+    ) {
         mainHandler.post {
-            ensurePillAttached()
-            statusDot?.background = circleDrawable(Color.parseColor("#E4E4E7"))
-            statusText?.text = message
-            mainHandler.postDelayed({ hide() }, durationMs)
+            cancelPendingDismiss()
+            if (!isError) {
+                // Brief mint pulse or immediate hide
+                val view = ensureAttached()
+                view.setMode(HudMode.COMPLETE)
+                val r = Runnable { hide() }
+                dismissRunnable = r
+                mainHandler.postDelayed(r, 320L)
+            } else {
+                val view = ensureAttached()
+                view.setMode(HudMode.ALERT)
+                val r = Runnable { hide() }
+                dismissRunnable = r
+                mainHandler.postDelayed(r, 550L)
+            }
         }
     }
 
     fun hide() {
         mainHandler.post {
-            if (isAdded && pillContainer != null) {
+            cancelPendingDismiss()
+            val view = capsuleView
+            if (isAdded && view != null) {
                 try {
-                    windowManager.removeView(pillContainer)
+                    windowManager.removeView(view)
                 } catch (_: Exception) {
                 }
+                view.stopLoop()
                 isAdded = false
             }
         }
     }
 
-    private fun ensurePillAttached() {
-        if (pillContainer == null) {
-            pillContainer = buildPillView()
+    private fun cancelPendingDismiss() {
+        dismissRunnable?.let { mainHandler.removeCallbacks(it) }
+        dismissRunnable = null
+    }
+
+    private fun ensureAttached(): MinimalWaveformPillView {
+        var view = capsuleView
+        if (view == null) {
+            view = MinimalWaveformPillView(serviceContext)
+            capsuleView = view
         }
+
         if (!isAdded) {
             val params = WindowManager.LayoutParams(
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                WindowManager.LayoutParams.WRAP_CONTENT,
+                dpToPx(96f),
+                dpToPx(28f),
                 WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
                     WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
                 PixelFormat.TRANSLUCENT
             ).apply {
-                gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-                y = dpToPx(48f)
+                gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+                x = 0
+                y = dpToPx(20f)
             }
             try {
-                windowManager.addView(pillContainer, params)
+                windowManager.addView(view, params)
                 isAdded = true
+                view.startEntryAnimation()
             } catch (_: Exception) {
             }
         }
-    }
 
-    private fun buildPillView(): LinearLayout {
-        val root = LinearLayout(serviceContext).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dpToPx(16f), dpToPx(10f), dpToPx(16f), dpToPx(10f))
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE
-                cornerRadius = dpToPx(24f).toFloat()
-                setColor(Color.parseColor("#F209090B"))
-                setStroke(dpToPx(1f), Color.parseColor("#3F3F46"))
-            }
-            elevation = dpToPx(8f).toFloat()
-        }
-
-        val dot = View(serviceContext).apply {
-            layoutParams = LinearLayout.LayoutParams(dpToPx(8f), dpToPx(8f)).apply {
-                marginEnd = dpToPx(10f)
-            }
-            background = circleDrawable(Color.parseColor("#FAFAFA"))
-        }
-        statusDot = dot
-        root.addView(dot)
-
-        val label = TextView(serviceContext).apply {
-            text = "Listening"
-            setTextColor(Color.parseColor("#FAFAFA"))
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                marginEnd = dpToPx(12f)
-            }
-        }
-        statusText = label
-        root.addView(label)
-
-        val barsWrap = LinearLayout(serviceContext).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                dpToPx(18f)
-            )
-        }
-        barViews.clear()
-        for (i in 0 until AudioCaptureManager.WAVEFORM_BARS) {
-            val bar = View(serviceContext).apply {
-                layoutParams = LinearLayout.LayoutParams(dpToPx(3f), dpToPx(6f)).apply {
-                    if (i < AudioCaptureManager.WAVEFORM_BARS - 1) {
-                        marginEnd = dpToPx(3f)
-                    }
-                }
-                background = GradientDrawable().apply {
-                    shape = GradientDrawable.RECTANGLE
-                    cornerRadius = dpToPx(2f).toFloat()
-                    setColor(Color.parseColor("#FAFAFA"))
-                }
-            }
-            barViews.add(bar)
-            barsWrap.addView(bar)
-        }
-        root.addView(barsWrap)
-        return root
-    }
-
-    private fun circleDrawable(color: Int): GradientDrawable {
-        return GradientDrawable().apply {
-            shape = GradientDrawable.OVAL
-            setColor(color)
-        }
+        view.startLoop()
+        return view
     }
 
     private fun dpToPx(dp: Float): Int {
@@ -190,5 +152,188 @@ class OverlayPillController(private val serviceContext: Context) {
             dp,
             serviceContext.resources.displayMetrics
         ).toInt()
+    }
+
+    private class MinimalWaveformPillView(context: Context) : View(context) {
+
+        private val density = context.resources.displayMetrics.density
+
+        private var mode: HudMode = HudMode.LISTENING
+
+        private val numBars = 9
+        private val targetBars = FloatArray(numBars) { 0.18f }
+        private val smoothBars = FloatArray(numBars) { 0.18f }
+
+        private var animPhase = 0f
+        private var entryProgress = 1f
+        private var frameAnimator: ValueAnimator? = null
+
+        private val capsuleRect = RectF()
+        private val shadowRect = RectF()
+        private val barRect = RectF()
+
+        private val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            color = Color.parseColor("#1B1712")
+        }
+        private val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            color = Color.parseColor("#FBF3E4")
+        }
+        private val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 1.75f * density
+            color = Color.parseColor("#1B1712")
+        }
+        private val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+        }
+        private val dotRingPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 1.25f * density
+            color = Color.parseColor("#1B1712")
+        }
+        private val barPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+        }
+
+        fun setMode(newMode: HudMode) {
+            mode = newMode
+            invalidate()
+        }
+
+        fun updateAudioLevels(levels: FloatArray) {
+            if (levels.isEmpty()) return
+            for (i in 0 until numBars) {
+                val srcIdx = (i * levels.size) / numBars
+                val raw = levels[srcIdx.coerceIn(0, levels.lastIndex)].coerceIn(0.10f, 1.0f)
+                val centerWeight = 1.0f - (abs(i - (numBars - 1) / 2f) / (numBars / 1.4f)) * 0.22f
+                targetBars[i] = (raw * centerWeight).coerceIn(0.14f, 1.0f)
+            }
+        }
+
+        fun startEntryAnimation() {
+            entryProgress = 0f
+            ValueAnimator.ofFloat(0f, 1f).apply {
+                duration = 130L
+                interpolator = DecelerateInterpolator(1.8f)
+                addUpdateListener {
+                    entryProgress = it.animatedValue as Float
+                    invalidate()
+                }
+                start()
+            }
+        }
+
+        fun startLoop() {
+            if (frameAnimator?.isRunning == true) return
+            frameAnimator = ValueAnimator.ofFloat(0f, 1000f).apply {
+                duration = 1000_000L
+                repeatCount = ValueAnimator.INFINITE
+                addUpdateListener {
+                    animPhase += 0.14f
+                    updateSmoothBars()
+                    invalidate()
+                }
+                start()
+            }
+        }
+
+        fun stopLoop() {
+            frameAnimator?.cancel()
+            frameAnimator = null
+        }
+
+        private fun updateSmoothBars() {
+            when (mode) {
+                HudMode.LISTENING -> {
+                    for (i in 0 until numBars) {
+                        val idleBreath = 0.16f + 0.05f * sin(animPhase + i * 0.5f).toFloat()
+                        val target = max(targetBars[i], idleBreath)
+                        smoothBars[i] += (target - smoothBars[i]) * 0.40f
+                    }
+                }
+                HudMode.TRANSCRIBING -> {
+                    for (i in 0 until numBars) {
+                        val wave = 0.20f + 0.58f * ((sin(animPhase * 2.2 - i * 0.55) + 1.0) * 0.5).toFloat()
+                        smoothBars[i] += (wave - smoothBars[i]) * 0.32f
+                    }
+                }
+                HudMode.COMPLETE -> {
+                    for (i in 0 until numBars) {
+                        smoothBars[i] += (0.55f - smoothBars[i]) * 0.35f
+                    }
+                }
+                HudMode.ALERT -> {
+                    for (i in 0 until numBars) {
+                        smoothBars[i] += (0.20f - smoothBars[i]) * 0.30f
+                    }
+                }
+            }
+        }
+
+        override fun onDraw(canvas: Canvas) {
+            super.onDraw(canvas)
+            val w = width.toFloat()
+            val h = height.toFloat()
+            if (w <= 0f || h <= 0f) return
+
+            val pad = 1.5f * density
+            val shadowOffset = 2.0f * density
+            val scale = 0.94f + 0.06f * entryProgress
+            canvas.save()
+            canvas.scale(scale, scale, w / 2f, h / 2f)
+
+            capsuleRect.set(pad, pad, w - pad - shadowOffset, h - pad - shadowOffset)
+            shadowRect.set(
+                capsuleRect.left + shadowOffset,
+                capsuleRect.top + shadowOffset,
+                capsuleRect.right + shadowOffset,
+                capsuleRect.bottom + shadowOffset
+            )
+            val radius = capsuleRect.height() / 2f
+
+            // Hard offset Lo-Fi Paper & Ink shadow + warm cream surface + crisp ink border
+            canvas.drawRoundRect(shadowRect, radius, radius, shadowPaint)
+            canvas.drawRoundRect(capsuleRect, radius, radius, bgPaint)
+            canvas.drawRoundRect(capsuleRect, radius, radius, borderPaint)
+
+            val dotColor = when (mode) {
+                HudMode.LISTENING -> Color.parseColor("#FF3B2F")
+                HudMode.TRANSCRIBING -> Color.parseColor("#FFCE4A")
+                HudMode.COMPLETE -> Color.parseColor("#36C2AD")
+                HudMode.ALERT -> Color.parseColor("#FF3B2F")
+            }
+
+            val cy = capsuleRect.centerY()
+            val cx = capsuleRect.left + 13.5f * density
+            dotPaint.color = dotColor
+            canvas.drawCircle(cx, cy, 4.0f * density, dotPaint)
+            canvas.drawCircle(cx, cy, 4.0f * density, dotRingPaint)
+
+            // 9 pure waveform bars (zero text)
+            val barW = 2.6f * density
+            val barGap = 3.2f * density
+            val totalBarsW = numBars * barW + (numBars - 1) * barGap
+            val availableRight = capsuleRect.right - 11f * density
+            val barsStartX = availableRight - totalBarsW
+            val maxBarH = 13.5f * density
+
+            for (i in 0 until numBars) {
+                val level = smoothBars[i].coerceIn(0.14f, 1.0f)
+                val barH = max(3.2f * density, level * maxBarH)
+                val bx = barsStartX + i * (barW + barGap)
+                barPaint.color = when (mode) {
+                    HudMode.LISTENING -> if (level > 0.34f) Color.parseColor("#FF3B2F") else Color.parseColor("#1B1712")
+                    HudMode.TRANSCRIBING -> Color.parseColor("#1B1712")
+                    HudMode.COMPLETE -> Color.parseColor("#36C2AD")
+                    HudMode.ALERT -> Color.parseColor("#FF3B2F")
+                }
+                barRect.set(bx, cy - barH / 2f, bx + barW, cy + barH / 2f)
+                canvas.drawRoundRect(barRect, barW / 2f, barW / 2f, barPaint)
+            }
+
+            canvas.restore()
+        }
     }
 }
