@@ -24,6 +24,15 @@ struct AppContext: Sendable, Equatable {
         return AppContext(bundleIdentifier: bundleID, appName: name, appTone: tone)
     }
 
+    static func s1Context(forBundleID bundleID: String?) -> S1Context? {
+        guard let bundleID else { return nil }
+        let id = bundleID.lowercased()
+        if id.contains("mail") || id.contains("outlook") || id.contains("spark") || id.contains("superhuman") {
+            return .email
+        }
+        return nil
+    }
+
     private static func toneForBundle(_ bundleID: String?) -> String {
         guard let bundleID else { return AppContext.default.appTone }
         let id = bundleID.lowercased()

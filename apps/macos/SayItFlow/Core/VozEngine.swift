@@ -19,7 +19,7 @@ final class VozEngine: ObservableObject {
     @Published private(set) var lastError: String?
 
     private var vozInstance: Voz?
-    private var isInitializing = false
+    private var warmUpTask: Task<Void, Error>?
     private var idleUnloadTask: Task<Void, Never>?
     private static let idleTimeoutSeconds: TimeInterval = 120
 
@@ -107,26 +107,35 @@ final class VozEngine: ObservableObject {
 
     /// Warms up and compiles the Core ML Neural Engine graph for Voz.
     func warmUp() async throws {
+        resetIdleTimer()
         if !isDownloaded {
             refreshStatus()
             if !isDownloaded { return }
         }
-        guard vozInstance == nil, !isInitializing else { return }
-        isInitializing = true
-        defer { isInitializing = false }
-
-        do {
-            #if canImport(CoreML)
-            let voz = try await Voz()
-            self.vozInstance = voz
-            self.isReady = true
-            AppLogger.dictation.notice("VozEngine: Voz model initialized successfully on Neural Engine.")
-            #endif
-        } catch {
-            lastError = error.localizedDescription
-            AppLogger.dictation.error("VozEngine warmUp failed: \(error.localizedDescription)")
-            throw error
+        if vozInstance != nil { return }
+        if let existingTask = warmUpTask {
+            try await existingTask.value
+            return
         }
+
+        let task = Task<Void, Error> { @MainActor in
+            defer { self.warmUpTask = nil }
+            do {
+                #if canImport(CoreML)
+                let voz = try await Voz()
+                self.vozInstance = voz
+                self.isReady = true
+                self.resetIdleTimer()
+                AppLogger.dictation.notice("VozEngine: Voz model initialized successfully on Neural Engine.")
+                #endif
+            } catch {
+                self.lastError = error.localizedDescription
+                AppLogger.dictation.error("VozEngine warmUp failed: \(error.localizedDescription)")
+                throw error
+            }
+        }
+        warmUpTask = task
+        try await task.value
     }
 
     /// Transcribe raw mono audio PCM samples at the given sample rate.

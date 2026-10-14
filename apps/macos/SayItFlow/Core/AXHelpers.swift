@@ -77,28 +77,42 @@ enum AXFocusResolver {
     }
 
     static func focusedTextElement(forPID targetPID: pid_t? = nil, diagnostics: inout Diagnostics) -> AXUIElement? {
-        let appPID = targetPID ?? NSWorkspace.shared.frontmostApplication?.processIdentifier
+        let frontmostPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        let appPID = targetPID ?? frontmostPID
         if let appPID {
             diagnostics.frontBundle = NSRunningApplication(processIdentifier: appPID)?.bundleIdentifier
             let appElement = AXUIElementCreateApplication(appPID)
+            AXUIElementSetMessagingTimeout(appElement, 0.025)
             if let element = copyFocused(from: appElement) {
+                AXUIElementSetMessagingTimeout(element, 0.025)
                 diagnostics.appScopedRole = AXHelpers.role(of: element)
                 if AXHelpers.isTextInputElement(element) || canInsertText(into: element) {
                     return element
                 }
             }
 
-            if let window = focusedWindow(in: appElement),
-               let element = findEditableElement(in: window, depth: 0) {
-                diagnostics.searchRole = AXHelpers.role(of: element)
-                return element
+            if let window = focusedWindow(in: appElement) {
+                AXUIElementSetMessagingTimeout(window, 0.025)
+                if let element = findEditableElement(in: window, depth: 0) {
+                    diagnostics.searchRole = AXHelpers.role(of: element)
+                    return element
+                }
             }
         }
 
-        if let element = copyFocused(from: AXUIElementCreateSystemWide()) {
-            diagnostics.systemWideRole = AXHelpers.role(of: element)
-            if AXHelpers.isTextInputElement(element) || canInsertText(into: element) {
-                return element
+        // Only query system-wide focus if no specific targetPID was requested or it matches the frontmost app.
+        if targetPID == nil || targetPID == frontmostPID {
+            let systemWide = AXUIElementCreateSystemWide()
+            AXUIElementSetMessagingTimeout(systemWide, 0.025)
+            if let element = copyFocused(from: systemWide) {
+                AXUIElementSetMessagingTimeout(element, 0.025)
+                if let targetPID, AXHelpers.processID(of: element) != targetPID {
+                    return nil
+                }
+                diagnostics.systemWideRole = AXHelpers.role(of: element)
+                if AXHelpers.isTextInputElement(element) || canInsertText(into: element) {
+                    return element
+                }
             }
         }
 
@@ -151,12 +165,15 @@ enum AXFocusResolver {
     }
 
     private static func findEditableElement(in root: AXUIElement, depth: Int) -> AXUIElement? {
-        guard depth < 8 else { return nil }
+        guard depth < 3 else { return nil }
 
-        if let focused = copyFocused(from: root), canInsertText(into: focused) {
-            return focused
+        if let focused = copyFocused(from: root) {
+            AXUIElementSetMessagingTimeout(focused, 0.02)
+            if canInsertText(into: focused) {
+                return focused
+            }
         }
-        if canInsertText(into: root) {
+        if depth > 0 && canInsertText(into: root) {
             return root
         }
 
@@ -169,9 +186,10 @@ enum AXFocusResolver {
             return nil
         }
 
-        for child in children {
+        for child in children.prefix(12) {
             guard let childRef = child as CFTypeRef?,
                   let element = AXHelpers.uiElement(from: childRef) else { continue }
+            AXUIElementSetMessagingTimeout(element, 0.02)
             if let match = findEditableElement(in: element, depth: depth + 1) {
                 return match
             }

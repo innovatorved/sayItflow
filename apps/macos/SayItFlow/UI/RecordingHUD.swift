@@ -105,9 +105,9 @@ final class RecordingHUDController: NSObject {
     func updateAudioLevel(_ level: Float) {
         let clamped = min(max(level, 0), 1)
         // Low-pass exponential smoothing to prevent vibration from mic noise
-        audioLevel = audioLevel * 0.7 + clamped * 0.3
+        audioLevel = audioLevel * 0.6 + clamped * 0.4
         let now = CFAbsoluteTimeGetCurrent()
-        guard now - lastAudioViewUpdate >= 0.1 else { return }
+        guard now - lastAudioViewUpdate >= 0.04 else { return }
         lastAudioViewUpdate = now
         updateView()
     }
@@ -121,10 +121,6 @@ final class RecordingHUDController: NSObject {
         placementScreen = nil
         panel?.orderOut(nil)
         removeEscapeMonitors()
-        // Release panel and hosting view to reclaim memory when not dictating
-        panel?.contentView = nil
-        panel = nil
-        hostingView = nil
     }
 
     private var panelSize: CGSize {

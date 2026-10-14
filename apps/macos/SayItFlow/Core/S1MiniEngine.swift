@@ -317,6 +317,7 @@ public final class S1MiniEngine: ObservableObject {
     /// Ensures the background llama-server process is active and ready to serve requests.
     @discardableResult
     public func ensureServerRunning() async -> Bool {
+        resetIdleShutdownTimer()
         if await checkHealth() {
             isServerRunning = true
             return true
@@ -334,9 +335,10 @@ public final class S1MiniEngine: ObservableObject {
         }
 
         guard !isStartingServer else {
-            for _ in 0..<20 {
+            for _ in 0..<30 {
                 try? await Task.sleep(nanoseconds: 100_000_000)
                 if isServerRunning { return true }
+                if !isStartingServer { break }
             }
             return isServerRunning
         }
@@ -350,12 +352,15 @@ public final class S1MiniEngine: ObservableObject {
         }
         serverProcess = nil
 
-        // Clean up any stale process occupying the port
-        let killTask = Process()
-        killTask.executableURL = URL(fileURLWithPath: "/usr/bin/pkill")
-        killTask.arguments = ["-f", "llama-server.*\(Self.serverPort)"]
-        try? killTask.run()
-        killTask.waitUntilExit()
+        // Clean up any stale process occupying the port off the main thread
+        let port = Self.serverPort
+        await Task.detached(priority: .utility) {
+            let killTask = Process()
+            killTask.executableURL = URL(fileURLWithPath: "/usr/bin/pkill")
+            killTask.arguments = ["-f", "llama-server.*\(port)"]
+            try? killTask.run()
+            killTask.waitUntilExit()
+        }.value
 
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: binaryPath)
@@ -364,7 +369,7 @@ public final class S1MiniEngine: ObservableObject {
             "--port", "\(Self.serverPort)",
             "-ngl", "99",
             "--host", "127.0.0.1",
-            "-c", "512",
+            "-c", "2048",
             "--log-disable"
         ]
         proc.standardOutput = FileHandle.nullDevice
@@ -384,6 +389,7 @@ public final class S1MiniEngine: ObservableObject {
             try? await Task.sleep(nanoseconds: 100_000_000)
             if await checkHealth() {
                 isServerRunning = true
+                resetIdleShutdownTimer()
                 AppLogger.dictation.notice("llama-server started successfully on port \(Self.serverPort)")
                 return true
             }
@@ -394,8 +400,10 @@ public final class S1MiniEngine: ObservableObject {
         return false
     }
 
-    /// Stops the local llama-server background process.
+    /// Stops the local llama-server background process without blocking the main thread.
     public func stopServer() {
+        idleShutdownTask?.cancel()
+        idleShutdownTask = nil
         if let proc = serverProcess, proc.isRunning {
             proc.terminate()
         }
@@ -406,7 +414,6 @@ public final class S1MiniEngine: ObservableObject {
         killTask.executableURL = URL(fileURLWithPath: "/usr/bin/pkill")
         killTask.arguments = ["-f", "llama-server.*\(Self.serverPort)"]
         try? killTask.run()
-        killTask.waitUntilExit()
     }
 
     // MARK: - Idle Shutdown
@@ -428,8 +435,13 @@ public final class S1MiniEngine: ObservableObject {
     /// - Parameters:
     ///   - rawTranscript: Raw transcript output from Desert Ant Voz.
     ///   - language: ISO language code (e.g. "en").
+    ///   - contextOverride: Optional automatic context when engine context is `.general`.
     /// - Returns: Cleaned, punctuated, normalized text ready for injection.
-    public func normalize(_ rawTranscript: String, language: String = "en") async -> String {
+    public func normalize(
+        _ rawTranscript: String,
+        language: String = "en",
+        contextOverride: S1Context? = nil
+    ) async -> String {
         let trimmed = rawTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return "" }
 
@@ -452,7 +464,7 @@ public final class S1MiniEngine: ObservableObject {
 
         // Inference Attempt: If model is downloaded and inference runner is available
         if isDownloaded {
-            if let output = await runInference(rawText: trimmed) {
+            if let output = await runInference(rawText: trimmed, contextOverride: contextOverride) {
                 let elapsed = (CFAbsoluteTimeGetCurrent() - start) * 1000.0
                 lastLatencyMs = elapsed
                 resetIdleShutdownTimer()
@@ -475,22 +487,24 @@ public final class S1MiniEngine: ObservableObject {
     /// System prompt specifies text normalizer role.
     /// User message starts with control line: `[Styling: ...] [Structure: ...] [Context: ...]`.
     /// Assistant turn is pre-seeded with `<think>\n\n</think>\n\n` to enforce `enable_thinking=false`.
-    public func buildPrompt(for rawTranscript: String) -> String {
-        "<|im_start|>system\nYou are a text normalizer for speech-to-text transcripts. The input begins with a control line specifying the styling, structure, and context settings; clean the transcript to match those settings and output only the cleaned text.<|im_end|>\n<|im_start|>user\n[Styling: \(styling.rawValue)] [Structure: \(structure.rawValue)] [Context: \(context.rawValue)]\n\(rawTranscript)<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
+    public func buildPrompt(for rawTranscript: String, contextOverride: S1Context? = nil) -> String {
+        let activeContext = (context == .general ? (contextOverride ?? context) : context)
+        return "<|im_start|>system\nYou are a text normalizer for speech-to-text transcripts. The input begins with a control line specifying the styling, structure, and context settings; clean the transcript to match those settings and output only the cleaned text.<|im_end|>\n<|im_start|>user\n[Styling: \(styling.rawValue)] [Structure: \(structure.rawValue)] [Context: \(activeContext.rawValue)]\n\(rawTranscript)<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
     }
 
     // MARK: - Inference Execution
 
-    private func queryLocalServer(prompt: String) async -> String? {
+    private func queryLocalServer(prompt: String, rawLength: Int) async -> String? {
         guard let url = URL(string: "http://127.0.0.1:\(Self.serverPort)/completion") else { return nil }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.timeoutInterval = 3.0
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
 
+        let maxPredict = max(128, min(1024, rawLength / 2 + 64))
         let body: [String: Any] = [
             "prompt": prompt,
-            "n_predict": 128,
+            "n_predict": maxPredict,
             "temperature": 0.0,
             "stop": ["<|im_end|>", "<|endoftext|>"]
         ]
@@ -512,18 +526,18 @@ public final class S1MiniEngine: ObservableObject {
         return nil
     }
 
-    private func runInference(rawText: String) async -> String? {
+    private func runInference(rawText: String, contextOverride: S1Context? = nil) async -> String? {
         if !isServerRunning {
             let ready = await ensureServerRunning()
             guard ready else { return nil }
         }
 
-        let prompt = buildPrompt(for: rawText)
+        let prompt = buildPrompt(for: rawText, contextOverride: contextOverride)
 
         // Query warm local server (sub-150ms)
-        if let output = await queryLocalServer(prompt: prompt) {
+        if let output = await queryLocalServer(prompt: prompt, rawLength: rawText.count) {
             let cleaned = cleanModelOutput(output, input: rawText)
-            if !cleaned.isEmpty {
+            if !cleaned.isEmpty, PolishOutputGuard.shouldApplyPolishResult(raw: rawText, polished: cleaned) {
                 return cleaned
             }
         }

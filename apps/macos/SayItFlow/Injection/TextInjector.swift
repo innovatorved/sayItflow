@@ -38,9 +38,10 @@ struct TextInjector {
             category: "injection"
         )
 
-        // Make sure the target application is frontmost and active
-        activatePinnedApp(pid: options.pinnedPID)
-        usleep(50_000) // 50ms settling window for WindowServer app focus
+        // Only activate and wait if the target application is not already frontmost
+        if activatePinnedApp(pid: options.pinnedPID) {
+            usleep(35_000)
+        }
 
         if options.preferPaste {
             if insertViaPaste(text, targetPID: options.pinnedPID) {
@@ -55,16 +56,18 @@ struct TextInjector {
         }
 
         // Accessibility failed or not supported in this app — try Cmd+V paste
-        activatePinnedApp(pid: options.pinnedPID)
-        usleep(40_000)
+        if activatePinnedApp(pid: options.pinnedPID) {
+            usleep(25_000)
+        }
         if insertViaPaste(text, targetPID: options.pinnedPID) {
             SessionTrace.log("Injected via paste fallback successfully", category: "injection")
             return
         }
 
         // Paste fallback failed — try simulated typing
-        activatePinnedApp(pid: options.pinnedPID)
-        usleep(30_000)
+        if activatePinnedApp(pid: options.pinnedPID) {
+            usleep(20_000)
+        }
         if KeystrokeEmitter.typeText(text, targetPID: options.pinnedPID) {
             SessionTrace.log("Injected via KeystrokeEmitter typing successfully", category: "injection")
             return
@@ -75,18 +78,24 @@ struct TextInjector {
         throw TextInjectionError.insertionFailed
     }
 
-    private func activatePinnedApp(pid: pid_t?) {
-        guard let pid else { return }
+    @discardableResult
+    private func activatePinnedApp(pid: pid_t?) -> Bool {
+        guard let pid else { return false }
         let ownPID = ProcessInfo.processInfo.processIdentifier
-        guard pid != ownPID else { return }
+        guard pid != ownPID else { return false }
+        if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid {
+            return false
+        }
         let app = NSRunningApplication(processIdentifier: pid)
         app?.activate(options: [.activateIgnoringOtherApps])
+        return true
     }
 
     private func insertViaAccessibility(_ text: String, targetPID: pid_t?) -> Bool {
         guard let focused = AXFocusResolver.focusedTextElement(forPID: targetPID) else { return false }
+        let spaced = smartSpacedText(text, for: focused)
 
-        if insertAtCaret(into: focused, text: text) {
+        if insertAtCaret(into: focused, text: spaced) {
             return true
         }
         if insertIntoEmptyField(focused, text: text) {
@@ -95,8 +104,42 @@ struct TextInjector {
         return false
     }
 
+    private func smartSpacedText(_ text: String, for element: AXUIElement) -> String {
+        guard let first = text.first, !first.isWhitespace else { return text }
+        var rangeRef: CFTypeRef?
+        var valueRef: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &rangeRef) == .success,
+              let rangeVal = rangeRef, CFGetTypeID(rangeVal) == AXValueGetTypeID(),
+              AXUIElementCopyAttributeValue(element, kAXValueAttribute as CFString, &valueRef) == .success,
+              let existing = valueRef as? String else {
+            return text
+        }
+        var cfRange = CFRange()
+        guard AXValueGetValue(unsafeBitCast(rangeVal, to: AXValue.self), .cfRange, &cfRange),
+              cfRange.location > 0 else {
+            return text
+        }
+        let utf16 = existing.utf16
+        guard cfRange.location <= utf16.count else { return text }
+        let idx = utf16.index(utf16.startIndex, offsetBy: cfRange.location - 1)
+        if let scalar = UnicodeScalar(utf16[idx]),
+           !CharacterSet.whitespacesAndNewlines.contains(scalar),
+           scalar != "(" && scalar != "[" && scalar != "{" && scalar != "\"" && scalar != "/" {
+            return " " + text
+        }
+        return text
+    }
+
     private func insertAtCaret(into element: AXUIElement, text: String) -> Bool {
-        AXUIElementSetAttributeValue(
+        var settable = DarwinBoolean(false)
+        guard AXUIElementIsAttributeSettable(
+            element,
+            kAXSelectedTextAttribute as CFString,
+            &settable
+        ) == .success, settable.boolValue else {
+            return false
+        }
+        return AXUIElementSetAttributeValue(
             element,
             kAXSelectedTextAttribute as CFString,
             text as CFTypeRef
@@ -104,6 +147,14 @@ struct TextInjector {
     }
 
     private func insertIntoEmptyField(_ element: AXUIElement, text: String) -> Bool {
+        var settable = DarwinBoolean(false)
+        guard AXUIElementIsAttributeSettable(
+            element,
+            kAXValueAttribute as CFString,
+            &settable
+        ) == .success, settable.boolValue else {
+            return false
+        }
         var valueRef: CFTypeRef?
         guard AXUIElementCopyAttributeValue(
             element,

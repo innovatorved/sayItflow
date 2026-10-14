@@ -46,7 +46,12 @@ final class AppSettings: ObservableObject {
     static let shared = AppSettings()
 
     @Published var hotkeyMode: HotkeyMode {
-        didSet { persist() }
+        didSet {
+            persist()
+            if oldValue != hotkeyMode {
+                AppState.shared.refreshHotkeyMode()
+            }
+        }
     }
     @Published var polishEnabled: Bool {
         didSet { persist() }
