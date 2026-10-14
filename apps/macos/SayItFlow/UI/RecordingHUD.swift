@@ -52,13 +52,6 @@ final class RecordingHUDController: NSObject {
         displayMode: HUDDisplayMode = .full,
         targetAppIcon: NSImage? = nil
     ) {
-        if state == .done {
-            let text = AppState.shared.partialTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !text.isEmpty {
-                let appName = NSWorkspace.shared.frontmostApplication?.localizedName ?? "SayItFlow"
-                DictationHistoryStore.shared.record(text: text, appName: appName)
-            }
-        }
         if releaseDismissed {
             guard state == .listening else { return }
             releaseDismissed = false
@@ -245,27 +238,6 @@ final class RecordingHUDController: NSObject {
 }
 
 
-private struct PulsingDot: View {
-    let color: Color
-    @State private var isPulsing = false
-
-    var body: some View {
-        Circle()
-            .fill(color)
-            .frame(width: 8, height: 8)
-            .scaleEffect(isPulsing ? 1.25 : 0.85)
-            .opacity(isPulsing ? 1.0 : 0.45)
-            .onAppear {
-                withAnimation(
-                    .easeInOut(duration: 0.8)
-                        .repeatForever(autoreverses: true)
-                ) {
-                    isPulsing = true
-                }
-            }
-    }
-}
-
 struct RecordingHUDView: View {
     let state: HUDState
     let partialText: String
@@ -288,42 +260,49 @@ struct RecordingHUDView: View {
 
     private var minimalBody: some View {
         HStack(spacing: 8) {
+            if let targetAppIcon {
+                Image(nsImage: targetAppIcon)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 18, height: 18)
+                    .clipShape(RoundedRectangle(cornerRadius: 4.5))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4.5)
+                            .stroke(Color.white.opacity(0.18), lineWidth: 0.5)
+                    )
+            } else {
+                LogoMark(size: .sm, tint: markColor)
+                    .frame(width: 18, height: 18)
+            }
+
             if state == .done {
-                Circle()
-                    .fill(DesignTokens.ready)
-                    .frame(width: 8, height: 8)
-                Image(systemName: "checkmark")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(DesignTokens.inkPrimary)
+                HStack(spacing: 4) {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(DesignTokens.successFg)
+                }
+                .frame(width: 51, height: 20)
             } else if case .error = state {
-                Circle()
-                    .fill(DesignTokens.dangerFg)
-                    .frame(width: 8, height: 8)
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(DesignTokens.dangerFg)
+                    .frame(width: 51, height: 20)
             } else {
-                PulsingDot(color: DesignTokens.recording)
-                WaveformGauge(level: audioLevel, color: DesignTokens.inkPrimary)
+                WaveformGauge(level: audioLevel, color: markColor)
             }
         }
-        .padding(.horizontal, 14)
-        .frame(height: 36)
-        .frame(minWidth: 108)
+        .padding(.horizontal, 12)
+        .frame(width: 116, height: 36)
         .background(
             Capsule()
-                .fill(DesignTokens.canvas)
-                .shadow(
-                    color: DesignTokens.shadowColor,
-                    radius: 0,
-                    x: 3,
-                    y: 3
-                )
+                .fill(.ultraThinMaterial)
         )
         .overlay(
             Capsule()
-                .stroke(DesignTokens.border, lineWidth: DesignTokens.borderWidth)
+                .stroke(DesignTokens.borderPrimary.opacity(0.6), lineWidth: 1)
         )
+        .clipShape(Capsule())
+        .shadow(color: Color.black.opacity(0.4), radius: 8, x: 0, y: 3)
         .padding(10)
     }
 
@@ -332,18 +311,18 @@ struct RecordingHUDView: View {
             brandMark
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
-                    .font(.system(size: DesignTokens.baseFontSize, weight: .heavy))
+                    .font(.system(size: DesignTokens.baseFontSize, weight: .semibold))
                     .tracking(-0.03)
-                    .foregroundStyle(DesignTokens.inkPrimary)
+                    .foregroundStyle(DesignTokens.textPrimary)
                 if !partialText.isEmpty && (state == .transcribing || state == .listening) {
                     Text(partialText)
-                        .font(.system(size: DesignTokens.baseFontSize, weight: .medium))
+                        .font(.system(size: DesignTokens.baseFontSize))
                         .tracking(-0.01)
-                        .foregroundStyle(DesignTokens.inkPrimary)
+                        .foregroundStyle(DesignTokens.textPrimary)
                         .lineLimit(2)
                 } else {
                     Text(subtitle)
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.system(size: 11))
                         .tracking(-0.01)
                         .foregroundStyle(subtitleColor)
                         .lineLimit(2)
@@ -353,17 +332,16 @@ struct RecordingHUDView: View {
             if state != .hidden && state != .done {
                 Button(action: onDismiss) {
                     Image(systemName: "xmark")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(DesignTokens.inkPrimary)
-                        .frame(width: 24, height: 24)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(DesignTokens.textSecondary)
+                        .frame(width: 22, height: 22)
                         .background(
-                            RoundedRectangle(cornerRadius: DesignTokens.radiusSm)
-                                .fill(DesignTokens.cardButter)
-                                .shadow(color: DesignTokens.shadowColor, radius: 0, x: 1.5, y: 1.5)
+                            DesignTokens.surfaceSecondary,
+                            in: RoundedRectangle(cornerRadius: DesignTokens.radiusSm)
                         )
                         .overlay(
                             RoundedRectangle(cornerRadius: DesignTokens.radiusSm)
-                                .stroke(DesignTokens.border, lineWidth: 1.5)
+                                .stroke(DesignTokens.borderSubtle, lineWidth: 1)
                         )
                 }
                 .buttonStyle(.plain)
@@ -374,19 +352,15 @@ struct RecordingHUDView: View {
         .padding(.vertical, DesignTokens.spaceMd)
         .frame(width: 340)
         .background(
-            RoundedRectangle(cornerRadius: DesignTokens.radiusLg)
-                .fill(DesignTokens.canvas)
-                .shadow(
-                    color: DesignTokens.shadowColor,
-                    radius: 0,
-                    x: DesignTokens.shadowOffset,
-                    y: DesignTokens.shadowOffset
-                )
+            RoundedRectangle(cornerRadius: DesignTokens.radiusXl)
+                .fill(.ultraThinMaterial)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: DesignTokens.radiusLg)
-                .stroke(DesignTokens.border, lineWidth: DesignTokens.borderWidth)
+            RoundedRectangle(cornerRadius: DesignTokens.radiusXl)
+                .stroke(DesignTokens.borderPrimary.opacity(0.6), lineWidth: 1)
         )
+        .clipShape(RoundedRectangle(cornerRadius: DesignTokens.radiusXl))
+        .shadow(color: .black.opacity(0.4), radius: 14, y: 6)
         .padding(10)
     }
 
@@ -401,7 +375,7 @@ struct RecordingHUDView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 6))
                     .overlay(
                         RoundedRectangle(cornerRadius: 6)
-                            .stroke(DesignTokens.border, lineWidth: 1)
+                            .stroke(Color.white.opacity(0.18), lineWidth: 0.5)
                     )
             } else {
                 LogoMark(size: .md, tint: markColor)
@@ -413,11 +387,10 @@ struct RecordingHUDView: View {
 
     private var markColor: Color {
         switch state {
-        case .listening, .transcribing: DesignTokens.recording
         case .polishing, .injecting: DesignTokens.warningFg
-        case .done: DesignTokens.ready
+        case .done: DesignTokens.successFg
         case .error: DesignTokens.dangerFg
-        default: DesignTokens.inkPrimary
+        default: DesignTokens.textPrimary
         }
     }
 
@@ -449,7 +422,7 @@ struct RecordingHUDView: View {
 
     private var subtitleColor: Color {
         if case .error = state { DesignTokens.dangerFg }
-        else { DesignTokens.inkSecondary }
+        else { DesignTokens.textSecondary }
     }
 }
 

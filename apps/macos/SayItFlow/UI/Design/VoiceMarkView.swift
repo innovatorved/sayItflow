@@ -1,186 +1,111 @@
 import AppKit
 import SwiftUI
 
-/// Signature SayItFlow 3-Bar Waveform Mark inside the Yellow Neo-Brutalist Badge
-/// Matches Android `LofiHeaderBar` in `DashboardScreen.kt` (3 vertical #1B1712 bars: short left, tall center, medium right).
-public struct WaveformBrandMark: View {
-    public var size: CGFloat = 18
-    public var tint: Color = DesignTokens.ink
-    public var accentColor: Color = DesignTokens.accentYellow
-    public var showAccentDot: Bool = false
-
-    // Exact relative bar heights from Android LofiHeaderBar: [9/16, 16/16, 11/16]
-    private let relHeights: [CGFloat] = [0.5625, 1.0, 0.6875]
-
-    public init(
-        size: CGFloat = 18,
-        tint: Color = DesignTokens.ink,
-        accentColor: Color = DesignTokens.accentYellow,
-        showAccentDot: Bool = false
-    ) {
-        self.size = size
-        self.tint = tint
-        self.accentColor = accentColor
-        self.showAccentDot = showAccentDot
-    }
-
-    public var body: some View {
-        let barWidth = max(2.5, size * 0.175)
-        let barSpacing = max(2.0, size * 0.145)
-        let maxBarHeight = size * 0.92
-
-        HStack(alignment: .center, spacing: barSpacing) {
-            ForEach(0..<relHeights.count, id: \.self) { i in
-                RoundedRectangle(cornerRadius: barWidth / 2.0)
-                    .fill(tint)
-                    .frame(width: barWidth, height: max(3, maxBarHeight * relHeights[i]))
-            }
-        }
-        .frame(width: size, height: size)
-    }
-}
-
-/// 3-bar waveform shape
+/// Official Ved Gupta Geometric V Logo
 struct VLogoShape: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
-        let relHeights: [CGFloat] = [0.5625, 1.0, 0.6875]
-        let barWidth = rect.height * 0.175
-        let barSpacing = rect.height * 0.145
-        let totalWidth = (3 * barWidth) + (2 * barSpacing)
-        var curX = rect.midX - totalWidth / 2.0
+        let w = rect.width
+        let h = rect.height
 
-        for rh in relHeights {
-            let bh = rect.height * rh * 0.92
-            let barRect = CGRect(x: curX, y: rect.midY - bh / 2.0, width: barWidth, height: bh)
-            path.addRoundedRect(in: barRect, cornerSize: CGSize(width: barWidth / 2, height: barWidth / 2))
-            curX += barWidth + barSpacing
-        }
+        // Precision geometric V glyph
+        path.move(to: CGPoint(x: w * 0.15, y: h * 0.2))
+        path.addLine(to: CGPoint(x: w * 0.5, y: h * 0.8))
+        path.addLine(to: CGPoint(x: w * 0.85, y: h * 0.2))
+        path.addLine(to: CGPoint(x: w * 0.70, y: h * 0.2))
+        path.addLine(to: CGPoint(x: w * 0.5, y: h * 0.58))
+        path.addLine(to: CGPoint(x: w * 0.30, y: h * 0.2))
+        path.closeSubpath()
         return path
     }
 }
 
-/// Monitor YT Playful Yellow Boxed Brand Badge (`#FFCE4A` fill, `2pt` `#1B1712` border, hard `#1B1712` offset shadow, 3 `#1B1712` bars)
-/// Exact 1:1 match with `LofiHeaderBar` in Android `DashboardScreen.kt`.
+/// Standalone icon mark inside a rounded 1px border box as defined in Ved Gupta design system
 struct LogoMark: View {
     enum Size {
         case sm, md, lg
 
         var boxSize: CGFloat {
             switch self {
-            case .sm: 30
-            case .md: 34
-            case .lg: 42
+            case .sm: 28 // 7rem (28px)
+            case .md: 32 // 8rem (32px)
+            case .lg: 40 // 10rem (40px)
             }
         }
 
         var iconSize: CGFloat {
             switch self {
-            case .sm: 15
-            case .md: 17
-            case .lg: 21
+            case .sm: 14
+            case .md: 16
+            case .lg: 20
             }
         }
 
         var cornerRadius: CGFloat {
-            switch self {
-            case .sm: 8
-            case .md: 10
-            case .lg: 12
-            }
-        }
-
-        var shadowOffset: CGFloat {
-            switch self {
-            case .sm: 2.0
-            case .md: 2.5
-            case .lg: 3.0
-            }
+            DesignTokens.radiusMd
         }
     }
 
     var size: Size = .md
-    var tint: Color = DesignTokens.ink
-    var fill: Color = DesignTokens.accentYellow
+    var tint: Color = DesignTokens.textPrimary
 
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: size.cornerRadius)
-                .fill(DesignTokens.ink)
-                .offset(x: size.shadowOffset, y: size.shadowOffset)
+                .fill(DesignTokens.surfaceSubtle)
             RoundedRectangle(cornerRadius: size.cornerRadius)
-                .fill(fill)
-            RoundedRectangle(cornerRadius: size.cornerRadius)
-                .strokeBorder(DesignTokens.ink, lineWidth: 2)
+                .stroke(DesignTokens.borderPrimary, lineWidth: 1)
 
-            WaveformBrandMark(
-                size: size.iconSize,
-                tint: tint
-            )
+            VLogoShape()
+                .fill(tint)
+                .frame(width: size.iconSize, height: size.iconSize)
         }
         .frame(width: size.boxSize, height: size.boxSize)
-        .padding(.trailing, size.shadowOffset)
-        .padding(.bottom, size.shadowOffset)
     }
 }
 
-/// App header lockup with Monitor YT Yellow 3-Bar Boxed Icon, bold grotesque title & `LO-FI VOICE` badge
+/// App header lockup with companion icon, title & tagline
 struct BrandLockup: View {
     var size: LogoMark.Size = .md
     var title: String = "SayItFlow"
-    var tagline: String = "LO-FI VOICE"
+    var tagline: String = "On-Device Neural Dictation"
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 12) {
             LogoMark(size: size)
 
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(title)
-                        .font(.system(size: size == .lg ? 20 : 17, weight: .heavy))
-                        .tracking(-0.5)
-                        .foregroundStyle(DesignTokens.ink)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(.system(size: size == .lg ? 16 : 14, weight: .semibold))
+                    .tracking(-0.03)
+                    .foregroundStyle(DesignTokens.textPrimary)
 
-                    Text("LO-FI VOICE")
-                        .font(.system(size: 9, weight: .heavy, design: .monospaced))
-                        .foregroundStyle(DesignTokens.ink)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(DesignTokens.paperDeep, in: RoundedRectangle(cornerRadius: 6))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 6)
-                                .strokeBorder(DesignTokens.ink, lineWidth: 1.5)
-                        )
-                }
-
-                if !tagline.isEmpty && tagline != "LO-FI VOICE" {
+                if !tagline.isEmpty {
                     Text(tagline)
-                        .font(.system(size: 11.5, weight: .medium))
-                        .foregroundStyle(DesignTokens.inkSoft)
+                        .font(.system(size: size == .lg ? 12 : 11, weight: .regular))
+                        .foregroundStyle(DesignTokens.textSecondary)
                 }
             }
         }
     }
 }
 
-/// Brand voice waveform — 3 vertical bars drawn in SwiftUI for in-app surfaces.
+/// Brand voice waveform — drawn in SwiftUI for in-app surfaces.
 struct VoiceMarkShape: View {
     var compact: Bool = false
-    var color: Color = DesignTokens.ink
-    var accentColor: Color = DesignTokens.accentYellow
+    var color: Color = DesignTokens.textPrimary
 
-    private var relHeights: [CGFloat] { [0.5625, 1.0, 0.6875] }
-    private var maxBarHeight: CGFloat { compact ? 13 : 16 }
-    private var barWidth: CGFloat { compact ? 2.5 : 3.0 }
-    private var barSpacing: CGFloat { compact ? 2.0 : 2.5 }
+    private var barWidths: [CGFloat] { compact ? [3, 3, 3, 3, 3] : [3, 3, 3, 3, 3] }
+    private var barHeights: [CGFloat] { compact ? [5, 8, 12, 8, 5] : [6, 10, 14, 10, 6] }
+    private var barSpacing: CGFloat { compact ? 1.5 : 2.0 }
     private var cornerRadius: CGFloat { 1.5 }
 
     var body: some View {
         HStack(alignment: .center, spacing: barSpacing) {
-            ForEach(0 ..< relHeights.count, id: \.self) { index in
+            ForEach(0 ..< barHeights.count, id: \.self) { index in
                 RoundedRectangle(cornerRadius: cornerRadius)
                     .fill(color)
-                    .frame(width: barWidth, height: maxBarHeight * relHeights[index])
+                    .frame(width: barWidths[index], height: barHeights[index])
             }
         }
     }
@@ -188,46 +113,48 @@ struct VoiceMarkShape: View {
 
 struct VoiceMarkView: View {
     var size: CGFloat = 18
-    var tint: Color = DesignTokens.ink
+    var tint: Color = DesignTokens.textPrimary
 
     var body: some View {
-        WaveformBrandMark(size: size, tint: tint)
+        VoiceMarkShape(compact: size <= 18, color: tint)
+            .frame(width: size, height: size)
     }
 }
 
-/// AppKit MenuBarExtra icon — 3 vertical rounded bars matching the SayItFlow brand icon
+/// AppKit template bitmap for MenuBarExtra
 enum MenuBarIconRenderer {
     private static let pointSize = NSSize(width: 18, height: 18)
-    private static let relHeights: [CGFloat] = [0.5625, 1.0, 0.6875]
-    private static let maxHeight: CGFloat = 12.5
-    private static let barWidth: CGFloat = 2.6
-    private static let barSpacing: CGFloat = 2.2
-    private static let cornerRadius: CGFloat = 1.3
+    private static let barWidths: [CGFloat] = [3, 3, 3, 3, 3]
+    private static let barHeights: [CGFloat] = [5, 8, 12, 8, 5]
+    private static let barSpacing: CGFloat = 1.25
+    private static let cornerRadius: CGFloat = 1.5
 
     @MainActor
     static func icon(for appState: AppState) -> NSImage {
-        let isRecording: Bool = {
-            if case .recording = appState.phase { return true }
-            return false
-        }()
+        _ = appState
+        return templateIcon
+    }
 
-        let img = NSImage(size: pointSize, flipped: false) { rect in
-            let totalWidth = (CGFloat(relHeights.count) * barWidth)
-                + (CGFloat(relHeights.count - 1) * barSpacing)
-            var curX = (rect.width - totalWidth) / 2.0
-            let midY = rect.height / 2.0
-
+    /// Single monochrome template — AppKit tints black/white for light/dark menu bar chrome.
+    private static let templateIcon: NSImage = {
+        let image = NSImage(size: pointSize, flipped: true) { rect in
+            NSColor.clear.setFill()
+            rect.fill()
             NSColor.black.setFill()
-            for rh in relHeights {
-                let bh = maxHeight * rh * (isRecording ? 1.08 : 1.0)
-                let barRect = NSRect(x: curX, y: midY - bh / 2.0, width: barWidth, height: bh)
-                let path = NSBezierPath(roundedRect: barRect, xRadius: cornerRadius, yRadius: cornerRadius)
-                path.fill()
-                curX += barWidth + barSpacing
+            let totalWidth = barWidths.reduce(0, +) + barSpacing * CGFloat(barWidths.count - 1)
+            var x = (rect.width - totalWidth) / 2
+            for index in barWidths.indices {
+                let height = barHeights[index]
+                let y = (rect.height - height) / 2
+                let bar = NSRect(x: x, y: y, width: barWidths[index], height: height)
+                NSBezierPath(roundedRect: bar, xRadius: cornerRadius, yRadius: cornerRadius).fill()
+                x += barWidths[index] + barSpacing
             }
             return true
         }
-        img.isTemplate = true
-        return img
-    }
+        image.isTemplate = true
+        return image
+    }()
 }
+
+

@@ -1,149 +1,199 @@
 import AppKit
 import SwiftUI
-#if canImport(AudioTapCore)
-@_exported import AudioTapCore
-#endif
 
-/// Monitor YT (`monitoryt.com`) Lo-Fi Paper & Ink Neo-Brutalist Design System
-/// Matches Android `DashboardScreen.kt` 1:1 via the `lofi-paper-ink-ui` skill.
-public enum DesignTokens {
-    // MARK: - Canonical Monitor YT Paper & Ink Palette
+/// Ved Gupta Design System: Monochromatic Precision
+/// Extracted from /Users/vedgupta/Desktop/design-system (tokens.json, COLOR_SYSTEM.md, AGENT.md, DESIGN_SYSTEM.md)
+enum DesignTokens {
+    // MARK: - Monochrome Palette
 
-    public static let paperBg       = Color(hex: 0xFBF3E4) // Warm cream paper canvas (#FBF3E4)
-    public static let paperDeep     = Color(hex: 0xF3E4C6) // Deeper warm sand/tan (#F3E4C6)
-    public static let cardWhite     = Color(hex: 0xFFFFFF) // Crisp white card surface (#FFFFFF)
-    public static let cardButter    = Color(hex: 0xFFF7E0) // Warm butter sticky-note (#FFF7E0)
-    public static let cardMint      = Color(hex: 0xE6FBF6) // Soft mint card surface (#E6FBF6)
-    public static let cardPeach     = Color(hex: 0xFFF0EC) // Soft peach card surface (#FFF0EC)
+    static let black = Color(hex: 0x000000)
+    static let white = Color(hex: 0xffffff)
 
-    public static let ink           = Color(hex: 0x1B1712) // Deep warm charcoal ink (#1B1712)
-    public static let inkSoft       = Color(hex: 0x5A5044) // Secondary warm brown-grey (#5A5044)
-    public static let inkMuted      = Color(hex: 0x8A7E6E) // Muted warm stone (#8A7E6E)
+    static let neutral50  = Color(hex: 0xfafafa)
+    static let neutral100 = Color(hex: 0xf5f5f5)
+    static let neutral200 = Color(hex: 0xe5e5e5)
+    static let neutral300 = Color(hex: 0xd4d4d4)
+    static let neutral400 = Color(hex: 0xa3a3a3)
+    static let neutral500 = Color(hex: 0x737373)
+    static let neutral600 = Color(hex: 0x525252)
+    static let neutral700 = Color(hex: 0x404040)
+    static let neutral800 = Color(hex: 0x262626)
+    static let neutral900 = Color(hex: 0x171717)
+    static let neutral950 = Color(hex: 0x0a0a0a)
 
-    public static let accentRed     = Color(hex: 0xFF3B2F) // Punchy signal red (#FF3B2F)
-    public static let accentYellow  = Color(hex: 0xFFCE4A) // Warm gold highlight (#FFCE4A)
-    public static let accentTeal    = Color(hex: 0x36C2AD) // Mint-teal ready status (#36C2AD)
-    public static let accentSky     = Color(hex: 0x74A7FF) // Periwinkle blue badge (#74A7FF)
-    public static let accentCoral   = Color(hex: 0xFF9E86) // Warm coral chip (#FF9E86)
-    public static let accentLilac   = Color(hex: 0xC8A8FF) // Soft lilac tag (#C8A8FF)
+    // MARK: - Surfaces & Canvas (Adaptive Light/Dark)
 
-    // MARK: - Backward-Compatible Semantic Aliases
+    /// Root page/window canvas. Pure OLED black in dark mode, pure white in light mode.
+    static var canvas: Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            appearance.isDark ? NSColor(hex: 0x000000) : NSColor(hex: 0xffffff)
+        })
+    }
 
-    public static var warmCanvas: Color { paperBg }
-    public static var warmSurface: Color { cardWhite }
-    public static var warmBorder: Color { ink }
-    public static var warmInkPrimary: Color { ink }
-    public static var warmInkSecondary: Color { inkSoft }
-    public static var warmInkMuted: Color { inkMuted }
-    public static var warmReady: Color { accentTeal }
-    public static var warmRecording: Color { accentRed }
+    /// Primary card/modal surface. #0a0a0a in dark, white in light.
+    static var surface: Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            appearance.isDark ? NSColor(hex: 0x0a0a0a) : NSColor(hex: 0xffffff)
+        })
+    }
 
-    /// Root page/window canvas: Warm cream paper #FBF3E4.
-    public static var canvas: Color { paperBg }
+    /// Secondary surface (sub-cards, icon boxes, table headers). #171717 dark, #f5f5f5 light.
+    static var surfaceSecondary: Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            appearance.isDark ? NSColor(hex: 0x171717) : NSColor(hex: 0xf5f5f5)
+        })
+    }
 
-    /// Primary card surface: Crisp white #FFFFFF.
-    public static var surface: Color { cardWhite }
+    /// Subtle fill (row hovers, marketing asides). #171717 dark, #fafafa light.
+    static var surfaceSubtle: Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            appearance.isDark ? NSColor(hex: 0x171717) : NSColor(hex: 0xfafafa)
+        })
+    }
 
-    /// Secondary surface (sidebar, segmented rail, keycaps): #F3E4C6.
-    public static var surfaceSecondary: Color { paperDeep }
+    /// Primary crisp 1px border. #262626 dark, #e5e5e5 light.
+    static var borderPrimary: Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            appearance.isDark ? NSColor(hex: 0x262626) : NSColor(hex: 0xe5e5e5)
+        })
+    }
 
-    /// Subtle fill (nested input boxes, unselected pills): #FBF3E4.
-    public static var surfaceSubtle: Color { paperBg }
+    /// Subtle divider border. #1f1f1f dark, #f0f0f0 light.
+    static var borderSubtle: Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            appearance.isDark ? NSColor(hex: 0x1f1f1f) : NSColor(hex: 0xf0f0f0)
+        })
+    }
 
-    /// Thick neo-brutalist ink border #1B1712.
-    public static var border: Color { ink }
-    public static var borderPrimary: Color { ink }
-    public static var borderSubtle: Color { ink.opacity(0.2) }
-    public static var borderHover: Color { ink }
+    /// Hover border. #525252 dark, #a1a1a1 light.
+    static var borderHover: Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            appearance.isDark ? NSColor(hex: 0x525252) : NSColor(hex: 0xa1a1a1)
+        })
+    }
 
-    // MARK: - Typography Hierarchy
+    // MARK: - Typography Contrast Hierarchy
 
-    public static var inkPrimary: Color { ink }
-    public static var textPrimary: Color { ink }
-    public static var inkSecondary: Color { inkSoft }
-    public static var textSecondary: Color { inkSoft }
-    public static var textMuted: Color { inkMuted }
+    /// Primary text. Pure white in dark, #0a0a0a in light.
+    static var textPrimary: Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            appearance.isDark ? NSColor(hex: 0xffffff) : NSColor(hex: 0x0a0a0a)
+        })
+    }
 
-    public static var ready: Color { accentTeal }
-    public static var recording: Color { accentRed }
-    public static var selection: Color { accentYellow }
-    public static var selectionForeground: Color { ink }
+    /// Secondary text (captions, descriptions). #a3a3a3 dark, #525252 light.
+    static var textSecondary: Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            appearance.isDark ? NSColor(hex: 0xa3a3a3) : NSColor(hex: 0x525252)
+        })
+    }
 
-    // MARK: - Semantic Neo-Brutalist Tints
+    /// Muted text (micro-eyebrows, uppercase tags). #737373.
+    static var textMuted: Color {
+        neutral500
+    }
 
-    // Success / Ready (Mint Teal)
-    public static var successFg: Color { ink }
-    public static var successBg: Color { accentTeal }
-    public static var successBorder: Color { ink }
+    /// Ved Gupta signature selection blue.
+    static let selection = Color(hex: 0x47a3f3)
+    static let selectionForeground = Color(hex: 0xfefefe)
 
-    // Warning (Warm Gold Yellow)
-    public static var warningFg: Color { ink }
-    public static var warningBg: Color { accentYellow }
-    public static var warningBorder: Color { ink }
+    // MARK: - Semantic Soft Tints (Badges & State)
 
-    // Danger (Signal Red / Coral)
-    public static var dangerFg: Color { ink }
-    public static var dangerBg: Color { accentCoral }
-    public static var dangerBorder: Color { ink }
-    public static let dangerSolid = Color(hex: 0xFF3B2F)
+    // Success (Green)
+    static var successFg: Color {
+        Color(nsColor: NSColor(name: nil) { $0.isDark ? NSColor(hex: 0x4ade80) : NSColor(hex: 0x15803d) })
+    }
+    static var successBg: Color {
+        Color(nsColor: NSColor(name: nil) { $0.isDark ? NSColor(red: 5/255, green: 46/255, blue: 22/255, alpha: 0.3) : NSColor(hex: 0xf0fdf4) })
+    }
+    static var successBorder: Color {
+        Color(nsColor: NSColor(name: nil) { $0.isDark ? NSColor(hex: 0x14532d) : NSColor(hex: 0xbbf7d0) })
+    }
 
-    // Info (Sky / Yellow)
-    public static var infoFg: Color { ink }
-    public static var infoBg: Color { accentSky }
-    public static var infoBorder: Color { ink }
+    // Warning (Amber)
+    static var warningFg: Color {
+        Color(nsColor: NSColor(name: nil) { $0.isDark ? NSColor(hex: 0xfbbf24) : NSColor(hex: 0xb45309) })
+    }
+    static var warningBg: Color {
+        Color(nsColor: NSColor(name: nil) { $0.isDark ? NSColor(red: 69/255, green: 26/255, blue: 3/255, alpha: 0.3) : NSColor(hex: 0xfffbeb) })
+    }
+    static var warningBorder: Color {
+        Color(nsColor: NSColor(name: nil) { $0.isDark ? NSColor(hex: 0x78350f) : NSColor(hex: 0xfde68a) })
+    }
 
-    // MARK: - Radii & Borders
+    // Danger (Red)
+    static var dangerFg: Color {
+        Color(nsColor: NSColor(name: nil) { $0.isDark ? NSColor(hex: 0xf87171) : NSColor(hex: 0xb91c1c) })
+    }
+    static var dangerBg: Color {
+        Color(nsColor: NSColor(name: nil) { $0.isDark ? NSColor(red: 69/255, green: 10/255, blue: 10/255, alpha: 0.3) : NSColor(hex: 0xfef2f2) })
+    }
+    static var dangerBorder: Color {
+        Color(nsColor: NSColor(name: nil) { $0.isDark ? NSColor(hex: 0x7f1d1d) : NSColor(hex: 0xfecaca) })
+    }
+    static let dangerSolid = Color(hex: 0xdc2626)
 
-    public static let radiusSm: CGFloat = 6
-    public static let radiusMd: CGFloat = 10
-    public static let radiusLg: CGFloat = 14
-    public static let radiusXl: CGFloat = 16
-    public static let radiusFull: CGFloat = 999
+    // Info (Blue)
+    static var infoFg: Color {
+        Color(nsColor: NSColor(name: nil) { $0.isDark ? NSColor(hex: 0x60a5fa) : NSColor(hex: 0x1d4ed8) })
+    }
+    static var infoBg: Color {
+        Color(nsColor: NSColor(name: nil) { $0.isDark ? NSColor(red: 23/255, green: 37/255, blue: 84/255, alpha: 0.3) : NSColor(hex: 0xeff6ff) })
+    }
+    static var infoBorder: Color {
+        Color(nsColor: NSColor(name: nil) { $0.isDark ? NSColor(hex: 0x1e3a8a) : NSColor(hex: 0xbfdbfe) })
+    }
 
-    public static let borderWidth: CGFloat = 2.0
-    public static let shadowOffset: CGFloat = 4.0
-    public static var shadowColor: Color { ink }
+    // MARK: - Radii
 
-    public static let displayFontSize: CGFloat = 22
-    public static let baseFontSize: CGFloat = 13
-    public static let sectionLabelSize: CGFloat = 11
-    public static var statValueFont: Font { .system(size: 20, weight: .heavy, design: .monospaced) }
+    static let radiusSm: CGFloat = 4
+    static let radiusMd: CGFloat = 6
+    static let radiusLg: CGFloat = 8
+    static let radiusXl: CGFloat = 12
+    static let radiusFull: CGFloat = 9999
 
-    public static let trackingTighter: CGFloat = -0.6
-    public static let trackingTight: CGFloat = -0.4
-    public static let trackingNormal: CGFloat = 0
-    public static let trackingLoose: CGFloat = 0.6
 
-    public static func fontDisplay(size: CGFloat, weight: Font.Weight = .heavy) -> Font {
+    static let displayFontSize: CGFloat = 24
+    static let baseFontSize: CGFloat = 13
+    static let sectionLabelSize: CGFloat = 11
+    static var statValueFont: Font { .system(size: 20, weight: .semibold, design: .monospaced) }
+
+    // Typography tokens
+    static let trackingTighter: CGFloat = -0.6
+    static let trackingTight: CGFloat = -0.3
+    static let trackingNormal: CGFloat = 0
+    static let trackingLoose: CGFloat = 0.8
+
+    static func fontDisplay(size: CGFloat, weight: Font.Weight = .semibold) -> Font {
         .system(size: size, weight: weight)
     }
 
-    public static func fontMono(size: CGFloat, weight: Font.Weight = .bold) -> Font {
+    static func fontMono(size: CGFloat, weight: Font.Weight = .regular) -> Font {
         .system(size: size, weight: weight, design: .monospaced)
     }
 
-    public static let spaceXs: CGFloat = 4
-    public static let spaceSm: CGFloat = 8
-    public static let spaceMd: CGFloat = 12
-    public static let spaceLg: CGFloat = 16
-    public static let spaceXl: CGFloat = 24
+    static let spaceXs: CGFloat = 4
+    static let spaceSm: CGFloat = 8
+    static let spaceMd: CGFloat = 12
+    static let spaceLg: CGFloat = 16
+    static let spaceXl: CGFloat = 24
 
     // MARK: - Motion
 
-    public static var reduceMotion: Bool {
+    static var reduceMotion: Bool {
         NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
     }
 
-    public static var easeOut: Animation {
-        reduceMotion ? .linear(duration: 0.01) : .easeOut(duration: 0.14)
+    static var easeOut: Animation {
+        reduceMotion ? .linear(duration: 0.01) : .easeOut(duration: 0.15)
     }
 
-    public static var pulse: Animation {
-        reduceMotion ? .linear(duration: 0.01) : .easeInOut(duration: 0.85).repeatForever(autoreverses: true)
+    static var pulse: Animation {
+        reduceMotion ? .linear(duration: 0.01) : .easeInOut(duration: 0.9).repeatForever(autoreverses: true)
     }
 }
 
-// MARK: - Color & NSColor Helpers
+// MARK: - Helpers
 
 extension Color {
     init(hex: UInt32, alpha: Double = 1) {
@@ -175,143 +225,88 @@ extension NSAppearance {
     }
 }
 
-// MARK: - Neo-Brutalist Paper Dot-Grid Canvas
+// MARK: - Button Styles
 
-public struct PaperDotGridBackground: View {
-    public init() {}
+/// Inverted monochrome primary button: black on white in dark mode, white on black in light mode.
+struct MonochromePrimaryButtonStyle: ButtonStyle {
+    @Environment(\.colorScheme) private var colorScheme
+    var isCompact: Bool = false
 
-    public var body: some View {
-        ZStack {
-            DesignTokens.paperBg
-            Canvas { context, size in
-                let step: CGFloat = 22.0
-                let radius: CGFloat = 1.15
-                let dotColor = DesignTokens.ink.opacity(0.09)
-                var y: CGFloat = 11.0
-                while y < size.height {
-                    var x: CGFloat = 11.0
-                    while x < size.width {
-                        let rect = CGRect(x: x - radius, y: y - radius, width: radius * 2, height: radius * 2)
-                        context.fill(Path(ellipseIn: rect), with: .color(dotColor))
-                        x += step
-                    }
-                    y += step
-                }
-            }
-        }
-        .ignoresSafeArea()
+    func makeBody(configuration: Configuration) -> some View {
+        let isDark = colorScheme == .dark
+        let bg = isDark ? Color.white : Color.black
+        let fg = isDark ? Color.black : Color.white
+        let pressedOpacity = configuration.isPressed ? 0.8 : 1.0
+
+        configuration.label
+            .font(.system(size: isCompact ? 12 : 13, weight: .medium))
+            .tracking(-0.02)
+            .foregroundStyle(fg)
+            .padding(.horizontal, isCompact ? 12 : 16)
+            .frame(height: isCompact ? 28 : 34)
+            .background(bg.opacity(pressedOpacity), in: RoundedRectangle(cornerRadius: DesignTokens.radiusMd))
+            .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
+            .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
     }
 }
 
-// MARK: - Neo-Brutalist Button Styles
-
-/// Primary Neo-Brutalist Pill Button: Signal Red (#FF3B2F) or Gold Yellow (#FFCE4A) with 2pt Ink border + hard offset shadow.
-struct MonochromePrimaryButtonStyle: ButtonStyle {
+/// 1px crisp outline button.
+struct MonochromeOutlineButtonStyle: ButtonStyle {
+    @Environment(\.colorScheme) private var colorScheme
     var isCompact: Bool = false
-    var fill: Color = DesignTokens.accentRed
-    var foreground: Color = DesignTokens.cardWhite
 
     func makeBody(configuration: Configuration) -> some View {
-        let offset: CGFloat = configuration.isPressed ? 1.0 : (isCompact ? 2.5 : 3.0)
-        let pressShift: CGFloat = configuration.isPressed ? 1.5 : 0.0
-
         configuration.label
-            .font(.system(size: isCompact ? 11.5 : 13, weight: .heavy))
-            .foregroundStyle(foreground)
+            .font(.system(size: isCompact ? 12 : 13, weight: .medium))
+            .tracking(-0.02)
+            .foregroundStyle(DesignTokens.textPrimary)
             .padding(.horizontal, isCompact ? 12 : 16)
             .frame(height: isCompact ? 28 : 34)
             .background(
-                ZStack {
-                    Capsule()
-                        .fill(DesignTokens.ink)
-                        .offset(x: offset, y: offset)
-                    Capsule()
-                        .fill(fill)
-                    Capsule()
-                        .strokeBorder(DesignTokens.ink, lineWidth: 2)
-                }
+                configuration.isPressed ? DesignTokens.surfaceSubtle : DesignTokens.surface,
+                in: RoundedRectangle(cornerRadius: DesignTokens.radiusMd)
             )
-            .offset(x: pressShift, y: pressShift)
-            .padding(.trailing, 3)
-            .padding(.bottom, 3)
-            .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
+            .overlay(
+                RoundedRectangle(cornerRadius: DesignTokens.radiusMd)
+                    .stroke(DesignTokens.borderPrimary, lineWidth: 1)
+            )
+            .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
+            .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
     }
 }
 
-/// Secondary Neo-Brutalist Outline Pill Button: Warm Yellow or White fill with 2pt Ink border + hard offset shadow.
-struct MonochromeOutlineButtonStyle: ButtonStyle {
-    var isCompact: Bool = false
-    var fill: Color = DesignTokens.accentYellow
-
-    func makeBody(configuration: Configuration) -> some View {
-        let offset: CGFloat = configuration.isPressed ? 1.0 : 2.5
-        let pressShift: CGFloat = configuration.isPressed ? 1.5 : 0.0
-
-        configuration.label
-            .font(.system(size: isCompact ? 11.5 : 12.5, weight: .heavy))
-            .foregroundStyle(DesignTokens.ink)
-            .padding(.horizontal, isCompact ? 12 : 14)
-            .frame(height: isCompact ? 28 : 32)
-            .background(
-                ZStack {
-                    Capsule()
-                        .fill(DesignTokens.ink)
-                        .offset(x: offset, y: offset)
-                    Capsule()
-                        .fill(configuration.isPressed ? DesignTokens.paperDeep : fill)
-                    Capsule()
-                        .strokeBorder(DesignTokens.ink, lineWidth: 2)
-                }
-            )
-            .offset(x: pressShift, y: pressShift)
-            .padding(.trailing, 3)
-            .padding(.bottom, 3)
-            .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
-    }
-}
-
-/// Ghost button with crisp ink border on hover/press.
+/// Ghost button (no border, hover fill).
 struct MonochromeGhostButtonStyle: ButtonStyle {
     var isCompact: Bool = false
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: isCompact ? 11.5 : 12.5, weight: .bold))
-            .foregroundStyle(DesignTokens.inkSoft)
+            .font(.system(size: isCompact ? 12 : 13, weight: .medium))
+            .tracking(-0.02)
+            .foregroundStyle(DesignTokens.textSecondary)
             .padding(.horizontal, isCompact ? 8 : 12)
-            .frame(height: isCompact ? 26 : 30)
+            .frame(height: isCompact ? 28 : 34)
             .background(
-                configuration.isPressed ? DesignTokens.paperDeep : Color.clear,
-                in: RoundedRectangle(cornerRadius: DesignTokens.radiusSm)
+                configuration.isPressed ? DesignTokens.surfaceSecondary : Color.clear,
+                in: RoundedRectangle(cornerRadius: DesignTokens.radiusMd)
             )
     }
 }
 
-// MARK: - Neo-Brutalist Card & Pill View Modifiers
+// MARK: - View Modifiers
 
-struct LofiCardModifier: ViewModifier {
-    var fill: Color = DesignTokens.cardWhite
-    var radius: CGFloat = DesignTokens.radiusXl
-    var borderWidth: CGFloat = 2.0
-    var shadowOffset: CGFloat = 4.0
+struct MonochromeCardModifier: ViewModifier {
+    var radius: CGFloat = DesignTokens.radiusLg
     var padding: CGFloat = 16
 
     func body(content: Content) -> some View {
         content
             .padding(padding)
-            .background(
-                ZStack {
-                    RoundedRectangle(cornerRadius: radius)
-                        .fill(DesignTokens.ink)
-                        .offset(x: shadowOffset, y: shadowOffset)
-                    RoundedRectangle(cornerRadius: radius)
-                        .fill(fill)
-                    RoundedRectangle(cornerRadius: radius)
-                        .strokeBorder(DesignTokens.ink, lineWidth: borderWidth)
-                }
+            .background(DesignTokens.surface, in: RoundedRectangle(cornerRadius: radius))
+            .overlay(
+                RoundedRectangle(cornerRadius: radius)
+                    .stroke(DesignTokens.borderPrimary, lineWidth: 1)
             )
-            .padding(.trailing, shadowOffset)
-            .padding(.bottom, shadowOffset)
     }
 }
 
@@ -322,43 +317,17 @@ struct MonochromeSubCardModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .padding(padding)
-            .background(DesignTokens.paperBg, in: RoundedRectangle(cornerRadius: radius))
+            .background(DesignTokens.surfaceSubtle, in: RoundedRectangle(cornerRadius: radius))
             .overlay(
                 RoundedRectangle(cornerRadius: radius)
-                    .strokeBorder(DesignTokens.ink, lineWidth: 1.5)
+                    .stroke(DesignTokens.borderSubtle, lineWidth: 1)
             )
     }
 }
 
 extension View {
-    func lofiCard(
-        fill: Color = DesignTokens.cardWhite,
-        radius: CGFloat = DesignTokens.radiusXl,
-        borderWidth: CGFloat = 2.0,
-        shadowOffset: CGFloat = 4.0,
-        padding: CGFloat = 16
-    ) -> some View {
-        modifier(LofiCardModifier(
-            fill: fill,
-            radius: radius,
-            borderWidth: borderWidth,
-            shadowOffset: shadowOffset,
-            padding: padding
-        ))
-    }
-
-    func monochromeCard(
-        radius: CGFloat = DesignTokens.radiusXl,
-        padding: CGFloat = 16,
-        fill: Color = DesignTokens.cardWhite
-    ) -> some View {
-        modifier(LofiCardModifier(
-            fill: fill,
-            radius: radius,
-            borderWidth: 2.0,
-            shadowOffset: 4.0,
-            padding: padding
-        ))
+    func monochromeCard(radius: CGFloat = DesignTokens.radiusLg, padding: CGFloat = 16) -> some View {
+        modifier(MonochromeCardModifier(radius: radius, padding: padding))
     }
 
     func monochromeSubCard(radius: CGFloat = DesignTokens.radiusMd, padding: CGFloat = 12) -> some View {
@@ -366,11 +335,12 @@ extension View {
     }
 
     func monochromeCanvas() -> some View {
-        background(PaperDotGridBackground())
+        background(DesignTokens.canvas)
     }
 
+    // Legacy helpers
     func adminCanvasBackground() -> some View {
-        background(PaperDotGridBackground())
+        background(DesignTokens.canvas)
     }
 
     func adminCard() -> some View {
@@ -385,121 +355,3 @@ extension View {
         formStyle(.grouped)
     }
 }
-
-#if !SWIFT_PACKAGE
-import Foundation
-import Combine
-
-/// Represents an individual voice dictation event stored in history.
-public struct DictationRecord: Identifiable, Codable, Equatable {
-    public let id: UUID
-    public let timestamp: Date
-    public let text: String
-    public let wordCount: Int
-    public let charCount: Int
-    public let appName: String
-    public let durationSeconds: Double
-
-    public init(
-        id: UUID = UUID(),
-        timestamp: Date = Date(),
-        text: String,
-        wordCount: Int? = nil,
-        charCount: Int? = nil,
-        appName: String = "",
-        durationSeconds: Double = 0.0
-    ) {
-        self.id = id
-        self.timestamp = timestamp
-        self.text = text
-        self.wordCount = wordCount ?? text.split { $0.isWhitespace || $0.isNewline }.count
-        self.charCount = charCount ?? text.count
-        self.appName = appName
-        self.durationSeconds = durationSeconds
-    }
-}
-
-/// On-device storage for past voice dictation sessions.
-@MainActor
-public final class DictationHistoryStore: ObservableObject {
-    public static let shared = DictationHistoryStore()
-
-    private static let storageKey = "SayItFlow.DictationHistory"
-    private static let maxRecords = 500
-
-    @Published public private(set) var records: [DictationRecord] = []
-
-    public init() {
-        load()
-    }
-
-    @discardableResult
-    public func record(text: String, appName: String = "", durationSeconds: Double = 0.0) -> DictationRecord? {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-
-        let item = DictationRecord(
-            text: trimmed,
-            appName: appName,
-            durationSeconds: durationSeconds
-        )
-
-        records.insert(item, at: 0)
-        if records.count > Self.maxRecords {
-            records = Array(records.prefix(Self.maxRecords))
-        }
-
-        save()
-        return item
-    }
-
-    public func delete(id: UUID) {
-        records.removeAll { $0.id == id }
-        save()
-    }
-
-    public func delete(at offsets: IndexSet) {
-        records.remove(atOffsets: offsets)
-        save()
-    }
-
-    public func clearAll() {
-        records.removeAll()
-        save()
-    }
-
-    public func search(query: String) -> [DictationRecord] {
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return records }
-
-        return records.filter { record in
-            record.text.localizedCaseInsensitiveContains(trimmed) ||
-            record.appName.localizedCaseInsensitiveContains(trimmed)
-        }
-    }
-
-    private func load() {
-        guard let data = UserDefaults.standard.data(forKey: Self.storageKey) else {
-            return
-        }
-        do {
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .iso8601
-            records = try decoder.decode([DictationRecord].self, from: data)
-        } catch {
-            records = []
-        }
-    }
-
-    private func save() {
-        do {
-            let encoder = JSONEncoder()
-            encoder.dateEncodingStrategy = .iso8601
-            let data = try encoder.encode(records)
-            UserDefaults.standard.set(data, forKey: Self.storageKey)
-        } catch {
-            // Ignore persistence write failure
-        }
-    }
-}
-#endif

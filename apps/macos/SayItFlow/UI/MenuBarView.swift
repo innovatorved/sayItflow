@@ -52,7 +52,7 @@ struct MenuBarView: View {
             footer
         }
         .frame(width: 300)
-        .background(DesignTokens.canvas)
+        .background(.ultraThinMaterial)
     }
 
     // MARK: - Header
