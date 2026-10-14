@@ -4,12 +4,36 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Waveform bars: Deep charcoal #141413 -->
+
+    <!-- Monitor YT Neo-Brutalist Yellow Boxed Badge (matches LofiHeaderBar in DashboardScreen.kt) -->
+    <!-- 1. Hard Offset Ink Shadow (+3.5dp, +3.5dp) in #1B1712 -->
     <path
-        android:fillColor="#141413"
-        android:pathData="M 34.5,45.9 a 2.25,2.25 0 0 1 2.25,2.25 v 11.7 a 2.25,2.25 0 0 1 -4.5,0 v -11.7 a 2.25,2.25 0 0 1 2.25,-2.25 Z M 43.5,36 a 2.25,2.25 0 0 1 2.25,2.25 v 31.5 a 2.25,2.25 0 0 1 -4.5,0 v -31.5 a 2.25,2.25 0 0 1 2.25,-2.25 Z M 52.5,41.4 a 2.25,2.25 0 0 1 2.25,2.25 v 20.7 a 2.25,2.25 0 0 1 -4.5,0 v -20.7 a 2.25,2.25 0 0 1 2.25,-2.25 Z M 61.5,47.7 a 2.25,2.25 0 0 1 2.25,2.25 v 8.1 a 2.25,2.25 0 0 1 -4.5,0 v -8.1 a 2.25,2.25 0 0 1 2.25,-2.25 Z" />
-    <!-- Accent dot: Terracotta #D97757 -->
+        android:fillColor="#1B1712"
+        android:pathData="M43.5,31.5 L69.5,31.5 A12,12 0 0,1 81.5,43.5 L81.5,69.5 A12,12 0 0,1 69.5,81.5 L43.5,81.5 A12,12 0 0,1 31.5,69.5 L31.5,43.5 A12,12 0 0,1 43.5,31.5 Z" />
+
+    <!-- 2. Outer Ink Border Box (50x50 from 28,28 to 78,78, corner radius 12) in #1B1712 -->
     <path
-        android:fillColor="#D97757"
-        android:pathData="M 72.75,51 a 3,3 0 1 0 0,6 a 3,3 0 1 0 0,-6 Z" />
+        android:fillColor="#1B1712"
+        android:pathData="M40,28 L66,28 A12,12 0 0,1 78,40 L78,66 A12,12 0 0,1 66,78 L40,78 A12,12 0 0,1 28,66 L28,40 A12,12 0 0,1 40,28 Z" />
+
+    <!-- 3. Inner AccentYellow Fill (#FFCE4A) inset by 3dp border (31,31 to 75,75, corner radius 9) -->
+    <path
+        android:fillColor="#FFCE4A"
+        android:pathData="M40,31 L66,31 A9,9 0 0,1 75,40 L75,66 A9,9 0 0,1 66,75 L40,75 A9,9 0 0,1 31,66 L31,40 A9,9 0 0,1 40,31 Z" />
+
+    <!-- 4. Three Vertical Ink Waveform Bars (#1B1712): Short Left, Tall Center, Medium Right -->
+    <!-- Left Bar (Short: width 5, height 14, x=41..46, y=46..60) -->
+    <path
+        android:fillColor="#1B1712"
+        android:pathData="M43.5,46 L43.5,46 A2.5,2.5 0 0,1 46,48.5 L46,57.5 A2.5,2.5 0 0,1 43.5,60 L43.5,60 A2.5,2.5 0 0,1 41,57.5 L41,48.5 A2.5,2.5 0 0,1 43.5,46 Z" />
+
+    <!-- Center Bar (Tall: width 5, height 24, x=50.5..55.5, y=41..65) -->
+    <path
+        android:fillColor="#1B1712"
+        android:pathData="M53,41 L53,41 A2.5,2.5 0 0,1 55.5,43.5 L55.5,62.5 A2.5,2.5 0 0,1 53,65 L53,65 A2.5,2.5 0 0,1 50.5,62.5 L50.5,43.5 A2.5,2.5 0 0,1 53,41 Z" />
+
+    <!-- Right Bar (Medium: width 5, height 17, x=60..65, y=44.5..61.5) -->
+    <path
+        android:fillColor="#1B1712"
+        android:pathData="M62.5,44.5 L62.5,44.5 A2.5,2.5 0 0,1 65,47 L65,59 A2.5,2.5 0 0,1 62.5,61.5 L62.5,61.5 A2.5,2.5 0 0,1 60,59 L60,47 A2.5,2.5 0 0,1 62.5,44.5 Z" />
 </vector>

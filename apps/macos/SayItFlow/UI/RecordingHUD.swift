@@ -294,7 +294,7 @@ struct RecordingHUDView: View {
                     .frame(width: 8, height: 8)
                 Image(systemName: "checkmark")
                     .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(DesignTokens.ready)
+                    .foregroundStyle(DesignTokens.inkPrimary)
             } else if case .error = state {
                 Circle()
                     .fill(DesignTokens.dangerFg)
@@ -313,13 +313,17 @@ struct RecordingHUDView: View {
         .background(
             Capsule()
                 .fill(DesignTokens.canvas)
+                .shadow(
+                    color: DesignTokens.shadowColor,
+                    radius: 0,
+                    x: 3,
+                    y: 3
+                )
         )
         .overlay(
             Capsule()
-                .stroke(DesignTokens.border, lineWidth: 1)
+                .stroke(DesignTokens.border, lineWidth: DesignTokens.borderWidth)
         )
-        .clipShape(Capsule())
-        .shadow(color: Color.black.opacity(0.12), radius: 8, x: 0, y: 2)
         .padding(10)
     }
 
@@ -328,18 +332,18 @@ struct RecordingHUDView: View {
             brandMark
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
-                    .font(.system(size: DesignTokens.baseFontSize, weight: .semibold))
+                    .font(.system(size: DesignTokens.baseFontSize, weight: .heavy))
                     .tracking(-0.03)
                     .foregroundStyle(DesignTokens.inkPrimary)
                 if !partialText.isEmpty && (state == .transcribing || state == .listening) {
                     Text(partialText)
-                        .font(.system(size: DesignTokens.baseFontSize))
+                        .font(.system(size: DesignTokens.baseFontSize, weight: .medium))
                         .tracking(-0.01)
                         .foregroundStyle(DesignTokens.inkPrimary)
                         .lineLimit(2)
                 } else {
                     Text(subtitle)
-                        .font(.system(size: 11))
+                        .font(.system(size: 11, weight: .medium))
                         .tracking(-0.01)
                         .foregroundStyle(subtitleColor)
                         .lineLimit(2)
@@ -349,16 +353,17 @@ struct RecordingHUDView: View {
             if state != .hidden && state != .done {
                 Button(action: onDismiss) {
                     Image(systemName: "xmark")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(DesignTokens.inkSecondary)
-                        .frame(width: 22, height: 22)
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(DesignTokens.inkPrimary)
+                        .frame(width: 24, height: 24)
                         .background(
-                            DesignTokens.surface,
-                            in: RoundedRectangle(cornerRadius: DesignTokens.radiusSm)
+                            RoundedRectangle(cornerRadius: DesignTokens.radiusSm)
+                                .fill(DesignTokens.cardButter)
+                                .shadow(color: DesignTokens.shadowColor, radius: 0, x: 1.5, y: 1.5)
                         )
                         .overlay(
                             RoundedRectangle(cornerRadius: DesignTokens.radiusSm)
-                                .stroke(DesignTokens.border, lineWidth: 1)
+                                .stroke(DesignTokens.border, lineWidth: 1.5)
                         )
                 }
                 .buttonStyle(.plain)
@@ -369,15 +374,19 @@ struct RecordingHUDView: View {
         .padding(.vertical, DesignTokens.spaceMd)
         .frame(width: 340)
         .background(
-            RoundedRectangle(cornerRadius: DesignTokens.radiusXl)
+            RoundedRectangle(cornerRadius: DesignTokens.radiusLg)
                 .fill(DesignTokens.canvas)
+                .shadow(
+                    color: DesignTokens.shadowColor,
+                    radius: 0,
+                    x: DesignTokens.shadowOffset,
+                    y: DesignTokens.shadowOffset
+                )
         )
         .overlay(
-            RoundedRectangle(cornerRadius: DesignTokens.radiusXl)
-                .stroke(DesignTokens.border, lineWidth: 1)
+            RoundedRectangle(cornerRadius: DesignTokens.radiusLg)
+                .stroke(DesignTokens.border, lineWidth: DesignTokens.borderWidth)
         )
-        .clipShape(RoundedRectangle(cornerRadius: DesignTokens.radiusXl))
-        .shadow(color: Color.black.opacity(0.12), radius: 12, y: 4)
         .padding(10)
     }
 

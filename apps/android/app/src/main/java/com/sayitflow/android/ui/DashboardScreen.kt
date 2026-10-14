@@ -293,9 +293,7 @@ fun DashboardScreen(
             return
         }
 
-        val useInstantStreaming =
-            asrEngineMode == SayItFlowCoordinator.AsrEngineMode.INSTANT_STREAMING &&
-                coordinator.fastStreamingEngine.isAvailable()
+        val useInstantStreaming = coordinator.shouldUseZeroLossStreamingPipe()
 
         if (useInstantStreaming) {
             if (!isStreamListening) {
@@ -354,7 +352,7 @@ fun DashboardScreen(
             return
         }
 
-        if (!coordinator.vozEngine.areModelFilesInstalled()) {
+        if (asrEngineMode == SayItFlowCoordinator.AsrEngineMode.VOZ_OFFLINE && !coordinator.vozEngine.areModelFilesInstalled()) {
             statusBannerText = "Downloading Voz-0.6B ASR model (384 MB)..."
             coordinator.downloadManager.startVozDownload()
             return
@@ -369,8 +367,8 @@ fun DashboardScreen(
         } else {
             val samples = coordinator.audioCapture.stopRecording()
             val rawMs = coordinator.audioCapture.lastRawDurationMs
-            if (rawMs < 350L) {
-                statusBannerText = "Recording too short — speak for at least half a second."
+            if (rawMs < 200L) {
+                statusBannerText = "Recording too short — speak clearly near the microphone."
                 return
             }
             if (samples.size < 1600) {
@@ -378,7 +376,9 @@ fun DashboardScreen(
                 return
             }
             isInAppTranscribing = true
-            statusBannerText = if (isVozLoaded) {
+            statusBannerText = if (asrEngineMode == SayItFlowCoordinator.AsrEngineMode.SENSE_VOICE_OFFLINE) {
+                "Transcribing on-device..."
+            } else if (isVozLoaded) {
                 "Transcribing with Voz-0.6B..."
             } else {
                 "Warming Voz-0.6B in RAM & transcribing..."
@@ -386,12 +386,16 @@ fun DashboardScreen(
             scope.launch {
                 val t0 = System.currentTimeMillis()
                 try {
-                    val raw = coordinator.vozEngine.transcribe(samples)
+                    val raw = if (asrEngineMode == SayItFlowCoordinator.AsrEngineMode.SENSE_VOICE_OFFLINE) {
+                        coordinator.senseVoiceEngine.transcribe(samples, language = selectedLanguage).text
+                    } else {
+                        coordinator.vozEngine.transcribe(samples)
+                    }
                     if (raw.isBlank()) {
                         statusBannerText = "No speech detected. Speak clearly near the microphone."
                     } else {
                         val shouldPolish = isS1MiniEnabled &&
-                            (selectedLanguage == "auto" || selectedLanguage == "en")
+                            (selectedLanguage == "auto" || selectedLanguage == "en" || selectedLanguage == "en-IN" || selectedLanguage == "hinglish")
                         val finalOut = if (shouldPolish) {
                             coordinator.s1MiniEngine.polish(
                                 rawTranscript = raw,
@@ -431,7 +435,7 @@ fun DashboardScreen(
 
     val isSystemFullyReady = hasMicPermission &&
         isAccessibilityConnected &&
-        (asrEngineMode == SayItFlowCoordinator.AsrEngineMode.INSTANT_STREAMING || vozStatus.isInstalled)
+        (asrEngineMode != SayItFlowCoordinator.AsrEngineMode.VOZ_OFFLINE || vozStatus.isInstalled)
 
     Column(
         modifier = Modifier
@@ -594,7 +598,7 @@ private fun LofiHeaderBar(
     isS1MiniEnabled: Boolean,
     onClickStatus: () -> Unit
 ) {
-    val statusFill = if (asrEngineMode == SayItFlowCoordinator.AsrEngineMode.INSTANT_STREAMING) {
+    val statusFill = if (asrEngineMode != SayItFlowCoordinator.AsrEngineMode.VOZ_OFFLINE) {
         AccentTeal
     } else {
         when {
@@ -604,10 +608,10 @@ private fun LofiHeaderBar(
             else -> AccentCoral
         }
     }
-    val statusLabel = if (asrEngineMode == SayItFlowCoordinator.AsrEngineMode.INSTANT_STREAMING) {
-        "Instant ~120ms"
-    } else {
-        when {
+    val statusLabel = when (asrEngineMode) {
+        SayItFlowCoordinator.AsrEngineMode.SENSE_VOICE_OFFLINE -> "On-Device Ready"
+        SayItFlowCoordinator.AsrEngineMode.INSTANT_STREAMING -> "Instant ~120ms"
+        SayItFlowCoordinator.AsrEngineMode.VOZ_OFFLINE -> when {
             vozStatus.isInstalled -> when {
                 isVozLoaded -> "Voz-0.6B Ready"
                 isVozWarming -> "Warming RAM..."
@@ -860,7 +864,7 @@ private fun SetupChecklistCard(
     onDownloadVoz: () -> Unit
 ) {
     val isEngineReady =
-        asrEngineMode == SayItFlowCoordinator.AsrEngineMode.INSTANT_STREAMING || vozStatus.isInstalled
+        asrEngineMode != SayItFlowCoordinator.AsrEngineMode.VOZ_OFFLINE || vozStatus.isInstalled
 
     Column(
         modifier = Modifier
@@ -940,12 +944,14 @@ private fun SetupChecklistCard(
             onAction = onOpenAccessibilitySettings
         )
 
-        val engineSub = if (asrEngineMode == SayItFlowCoordinator.AsrEngineMode.INSTANT_STREAMING) {
-            "Instant Tensor Streaming (~120ms response)"
-        } else {
-            when {
+        val engineSub = when (asrEngineMode) {
+            SayItFlowCoordinator.AsrEngineMode.SENSE_VOICE_OFFLINE ->
+                "On-Device Zero-Loss ASR Ready (All Android Phones)"
+            SayItFlowCoordinator.AsrEngineMode.INSTANT_STREAMING ->
+                "Instant Streaming (~120ms response)"
+            SayItFlowCoordinator.AsrEngineMode.VOZ_OFFLINE -> when {
                 vozStatus.isInstalled ->
-                    if (isVozLoaded) "Loaded in Tensor G2 RAM" else if (isVozWarming) "Warming up in RAM..." else "Installed (384 MB)"
+                    if (isVozLoaded) "Loaded in RAM" else if (isVozWarming) "Warming up in RAM..." else "Installed (384 MB)"
                 vozStatus.isDownloading ->
                     "Downloading ${vozStatus.downloadedBytes / (1024 * 1024)} / ${vozStatus.totalBytes / (1024 * 1024)} MB..."
                 vozStatus.errorMessage != null ->

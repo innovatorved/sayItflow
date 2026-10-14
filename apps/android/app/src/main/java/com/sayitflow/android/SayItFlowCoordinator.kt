@@ -162,10 +162,27 @@ class SayItFlowCoordinator private constructor(context: Context) {
 
     init {
         senseVoiceEngine.vozEngineDelegate = vozEngine
+        senseVoiceEngine.fastStreamingDelegate = fastStreamingEngine
         senseVoiceEngine.warmUpAsync()
         if (_asrEngineMode.value == AsrEngineMode.VOZ_OFFLINE && vozEngine.areModelFilesInstalled()) {
             vozEngine.warmUpAsync()
         }
+    }
+
+    /**
+     * Returns true when live Hold-to-Talk should use the zero-loss continuous pipe (`FastStreamingAsrEngine`).
+     * Both `SENSE_VOICE_OFFLINE` (when standalone 230MB ONNX file isn't sideloaded) and `INSTANT_STREAMING`
+     * use the zero-loss lock-free audio queue + multi-segment continuation + PCM replay engine.
+     */
+    fun shouldUseZeroLossStreamingPipe(): Boolean {
+        val mode = _asrEngineMode.value
+        if (mode == AsrEngineMode.INSTANT_STREAMING) {
+            return fastStreamingEngine.isAvailable()
+        }
+        if (mode == AsrEngineMode.SENSE_VOICE_OFFLINE && !senseVoiceEngine.hasStandaloneOnnxModel()) {
+            return fastStreamingEngine.isAvailable()
+        }
+        return false
     }
 
     private val _triggerMode = MutableStateFlow(
@@ -175,10 +192,10 @@ class SayItFlowCoordinator private constructor(context: Context) {
     val triggerMode: StateFlow<TriggerMode> = _triggerMode.asStateFlow()
 
     private val _holdThresholdMs = MutableStateFlow(
-        prefs.getLong("hold_threshold_ms", 500L).let { saved ->
-            if (saved < 400L) {
-                prefs.edit().putLong("hold_threshold_ms", 500L).apply()
-                500L
+        prefs.getLong("hold_threshold_ms", 400L).let { saved ->
+            if (saved < 300L) {
+                prefs.edit().putLong("hold_threshold_ms", 400L).apply()
+                400L
             } else {
                 saved
             }

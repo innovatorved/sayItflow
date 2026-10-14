@@ -4,122 +4,121 @@ import SwiftUI
 @_exported import AudioTapCore
 #endif
 
-/// MonitorYT-Inspired Warm Lo-Fi Editorial Design System
+/// Monitor YT (`monitoryt.com`) Lo-Fi Paper & Ink Neo-Brutalist Design System
+/// Matches Android `DashboardScreen.kt` 1:1 via the `lofi-paper-ink-ui` skill.
 public enum DesignTokens {
-    // MARK: - MonitorYT Warm Lo-Fi Palette
+    // MARK: - Canonical Monitor YT Paper & Ink Palette
 
-    public static let warmCanvas       = Color(hex: 0xFAF9F6) // Warm alabaster (#FAF9F6)
-    public static let warmSurface      = Color(hex: 0xF3F1EC) // Soft stone (#F3F1EC)
-    public static let warmBorder       = Color(hex: 0xE4E1DA) // Crisp 1px sand border (#E4E1DA)
-    public static let warmInkPrimary   = Color(hex: 0x141413) // Deep charcoal ink (#141413)
-    public static let warmInkSecondary = Color(hex: 0x5A5044) // Warm muted brown (#5A5044)
-    public static let warmInkMuted     = Color(hex: 0x8A7E6E) // Subtle stone (#8A7E6E)
-    public static let warmReady        = Color(hex: 0x15803D) // Forest green status (#15803D)
-    public static let warmRecording    = Color(hex: 0xD97757) // Terracotta recording accent (#D97757)
+    public static let paperBg       = Color(hex: 0xFBF3E4) // Warm cream paper canvas (#FBF3E4)
+    public static let paperDeep     = Color(hex: 0xF3E4C6) // Deeper warm sand/tan (#F3E4C6)
+    public static let cardWhite     = Color(hex: 0xFFFFFF) // Crisp white card surface (#FFFFFF)
+    public static let cardButter    = Color(hex: 0xFFF7E0) // Warm butter sticky-note (#FFF7E0)
+    public static let cardMint      = Color(hex: 0xE6FBF6) // Soft mint card surface (#E6FBF6)
+    public static let cardPeach     = Color(hex: 0xFFF0EC) // Soft peach card surface (#FFF0EC)
 
-    // MARK: - Surfaces & Canvas (Canonical MonitorYT Tokens)
+    public static let ink           = Color(hex: 0x1B1712) // Deep warm charcoal ink (#1B1712)
+    public static let inkSoft       = Color(hex: 0x5A5044) // Secondary warm brown-grey (#5A5044)
+    public static let inkMuted      = Color(hex: 0x8A7E6E) // Muted warm stone (#8A7E6E)
 
-    /// Root page/window canvas. Warm alabaster #FAF9F6.
-    public static var canvas: Color { warmCanvas }
+    public static let accentRed     = Color(hex: 0xFF3B2F) // Punchy signal red (#FF3B2F)
+    public static let accentYellow  = Color(hex: 0xFFCE4A) // Warm gold highlight (#FFCE4A)
+    public static let accentTeal    = Color(hex: 0x36C2AD) // Mint-teal ready status (#36C2AD)
+    public static let accentSky     = Color(hex: 0x74A7FF) // Periwinkle blue badge (#74A7FF)
+    public static let accentCoral   = Color(hex: 0xFF9E86) // Warm coral chip (#FF9E86)
+    public static let accentLilac   = Color(hex: 0xC8A8FF) // Soft lilac tag (#C8A8FF)
 
-    /// Primary card/modal surface. Soft stone #F3F1EC.
-    public static var surface: Color { warmSurface }
+    // MARK: - Backward-Compatible Semantic Aliases
 
-    /// Secondary surface (sub-cards, icon boxes, table headers).
-    public static var surfaceSecondary: Color { warmSurface }
+    public static var warmCanvas: Color { paperBg }
+    public static var warmSurface: Color { cardWhite }
+    public static var warmBorder: Color { ink }
+    public static var warmInkPrimary: Color { ink }
+    public static var warmInkSecondary: Color { inkSoft }
+    public static var warmInkMuted: Color { inkMuted }
+    public static var warmReady: Color { accentTeal }
+    public static var warmRecording: Color { accentRed }
 
-    /// Subtle fill (row hovers, text editor background).
-    public static var surfaceSubtle: Color { Color(hex: 0xF8F7F4) }
+    /// Root page/window canvas: Warm cream paper #FBF3E4.
+    public static var canvas: Color { paperBg }
 
-    /// Crisp sand border #E4E1DA.
-    public static var border: Color { warmBorder }
+    /// Primary card surface: Crisp white #FFFFFF.
+    public static var surface: Color { cardWhite }
 
-    /// Backward-compatibility alias for border.
-    public static var borderPrimary: Color { warmBorder }
+    /// Secondary surface (sidebar, segmented rail, keycaps): #F3E4C6.
+    public static var surfaceSecondary: Color { paperDeep }
 
-    /// Backward-compatibility alias for subtle divider border.
-    public static var borderSubtle: Color { warmBorder }
+    /// Subtle fill (nested input boxes, unselected pills): #FBF3E4.
+    public static var surfaceSubtle: Color { paperBg }
 
-    /// Hover border.
-    public static var borderHover: Color { Color(hex: 0xD8D4CB) }
+    /// Thick neo-brutalist ink border #1B1712.
+    public static var border: Color { ink }
+    public static var borderPrimary: Color { ink }
+    public static var borderSubtle: Color { ink.opacity(0.2) }
+    public static var borderHover: Color { ink }
 
-    // MARK: - Typography Contrast Hierarchy (Canonical MonitorYT Tokens)
+    // MARK: - Typography Hierarchy
 
-    /// Primary deep charcoal ink #141413.
-    public static var inkPrimary: Color { warmInkPrimary }
+    public static var inkPrimary: Color { ink }
+    public static var textPrimary: Color { ink }
+    public static var inkSecondary: Color { inkSoft }
+    public static var textSecondary: Color { inkSoft }
+    public static var textMuted: Color { inkMuted }
 
-    /// Backward-compatibility alias for textPrimary.
-    public static var textPrimary: Color { warmInkPrimary }
+    public static var ready: Color { accentTeal }
+    public static var recording: Color { accentRed }
+    public static var selection: Color { accentYellow }
+    public static var selectionForeground: Color { ink }
 
-    /// Warm muted brown ink #5A5044.
-    public static var inkSecondary: Color { warmInkSecondary }
+    // MARK: - Semantic Neo-Brutalist Tints
 
-    /// Backward-compatibility alias for textSecondary.
-    public static var textSecondary: Color { warmInkSecondary }
+    // Success / Ready (Mint Teal)
+    public static var successFg: Color { ink }
+    public static var successBg: Color { accentTeal }
+    public static var successBorder: Color { ink }
 
-    /// Subtle stone muted ink #8A7E6E.
-    public static var inkMuted: Color { warmInkMuted }
+    // Warning (Warm Gold Yellow)
+    public static var warningFg: Color { ink }
+    public static var warningBg: Color { accentYellow }
+    public static var warningBorder: Color { ink }
 
-    /// Backward-compatibility alias for textMuted.
-    public static var textMuted: Color { warmInkMuted }
+    // Danger (Signal Red / Coral)
+    public static var dangerFg: Color { ink }
+    public static var dangerBg: Color { accentCoral }
+    public static var dangerBorder: Color { ink }
+    public static let dangerSolid = Color(hex: 0xFF3B2F)
 
-    /// Forest green active/ready status #15803D.
-    public static var ready: Color { warmReady }
+    // Info (Sky / Yellow)
+    public static var infoFg: Color { ink }
+    public static var infoBg: Color { accentSky }
+    public static var infoBorder: Color { ink }
 
-    /// Terracotta recording accent #D97757.
-    public static var recording: Color { warmRecording }
+    // MARK: - Radii & Borders
 
-    /// Signature selection accent.
-    public static var selection: Color { warmRecording }
-    public static var selectionForeground: Color { warmCanvas }
+    public static let radiusSm: CGFloat = 6
+    public static let radiusMd: CGFloat = 10
+    public static let radiusLg: CGFloat = 14
+    public static let radiusXl: CGFloat = 16
+    public static let radiusFull: CGFloat = 999
 
-    // MARK: - Semantic Soft Tints (Badges & State)
+    public static let borderWidth: CGFloat = 2.0
+    public static let shadowOffset: CGFloat = 4.0
+    public static var shadowColor: Color { ink }
 
-    // Success / Ready (Green)
-    public static var successFg: Color { warmReady }
-    public static var successBg: Color { Color(hex: 0xEEF7F1) }
-    public static var successBorder: Color { Color(hex: 0xC6E7D1) }
-
-    // Warning (Amber / Gold)
-    public static var warningFg: Color { Color(hex: 0xB45309) }
-    public static var warningBg: Color { Color(hex: 0xFDF6E7) }
-    public static var warningBorder: Color { Color(hex: 0xF7E2B0) }
-
-    // Danger (Red)
-    public static var dangerFg: Color { Color(hex: 0xB91C1C) }
-    public static var dangerBg: Color { Color(hex: 0xFDF1F1) }
-    public static var dangerBorder: Color { Color(hex: 0xF7CACA) }
-    public static let dangerSolid = Color(hex: 0xDC2626)
-
-    // Info (Terracotta Accent)
-    public static var infoFg: Color { warmRecording }
-    public static var infoBg: Color { Color(hex: 0xFAF0EC) }
-    public static var infoBorder: Color { Color(hex: 0xF2D4C9) }
-
-    // MARK: - Radii
-
-    public static let radiusSm: CGFloat = 4
-    public static let radiusMd: CGFloat = 6
-    public static let radiusLg: CGFloat = 8
-    public static let radiusXl: CGFloat = 12
-    public static let radiusFull: CGFloat = 9999
-
-    public static let displayFontSize: CGFloat = 24
+    public static let displayFontSize: CGFloat = 22
     public static let baseFontSize: CGFloat = 13
     public static let sectionLabelSize: CGFloat = 11
-    public static var statValueFont: Font { .system(size: 20, weight: .semibold, design: .monospaced) }
+    public static var statValueFont: Font { .system(size: 20, weight: .heavy, design: .monospaced) }
 
-    // Typography tokens
     public static let trackingTighter: CGFloat = -0.6
-    public static let trackingTight: CGFloat = -0.3
+    public static let trackingTight: CGFloat = -0.4
     public static let trackingNormal: CGFloat = 0
-    public static let trackingLoose: CGFloat = 0.8
+    public static let trackingLoose: CGFloat = 0.6
 
-    public static func fontDisplay(size: CGFloat, weight: Font.Weight = .semibold) -> Font {
+    public static func fontDisplay(size: CGFloat, weight: Font.Weight = .heavy) -> Font {
         .system(size: size, weight: weight)
     }
 
-    public static func fontMono(size: CGFloat, weight: Font.Weight = .regular) -> Font {
+    public static func fontMono(size: CGFloat, weight: Font.Weight = .bold) -> Font {
         .system(size: size, weight: weight, design: .monospaced)
     }
 
@@ -136,15 +135,15 @@ public enum DesignTokens {
     }
 
     public static var easeOut: Animation {
-        reduceMotion ? .linear(duration: 0.01) : .easeOut(duration: 0.15)
+        reduceMotion ? .linear(duration: 0.01) : .easeOut(duration: 0.14)
     }
 
     public static var pulse: Animation {
-        reduceMotion ? .linear(duration: 0.01) : .easeInOut(duration: 0.9).repeatForever(autoreverses: true)
+        reduceMotion ? .linear(duration: 0.01) : .easeInOut(duration: 0.85).repeatForever(autoreverses: true)
     }
 }
 
-// MARK: - Helpers
+// MARK: - Color & NSColor Helpers
 
 extension Color {
     init(hex: UInt32, alpha: Double = 1) {
@@ -176,85 +175,143 @@ extension NSAppearance {
     }
 }
 
-// MARK: - Button Styles
+// MARK: - Neo-Brutalist Paper Dot-Grid Canvas
 
-/// Warm lo-fi MonitorYT primary button: deep charcoal #141413 on warm alabaster #FAF9F6.
-struct MonochromePrimaryButtonStyle: ButtonStyle {
-    var isCompact: Bool = false
+public struct PaperDotGridBackground: View {
+    public init() {}
 
-    func makeBody(configuration: Configuration) -> some View {
-        let bg = DesignTokens.inkPrimary
-        let fg = DesignTokens.canvas
-        let pressedOpacity = configuration.isPressed ? 0.85 : 1.0
-
-        configuration.label
-            .font(.system(size: isCompact ? 12 : 13, weight: .medium))
-            .tracking(-0.02)
-            .foregroundStyle(fg)
-            .padding(.horizontal, isCompact ? 12 : 16)
-            .frame(height: isCompact ? 28 : 34)
-            .background(bg.opacity(pressedOpacity), in: RoundedRectangle(cornerRadius: DesignTokens.radiusMd))
-            .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
-            .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
+    public var body: some View {
+        ZStack {
+            DesignTokens.paperBg
+            Canvas { context, size in
+                let step: CGFloat = 22.0
+                let radius: CGFloat = 1.15
+                let dotColor = DesignTokens.ink.opacity(0.09)
+                var y: CGFloat = 11.0
+                while y < size.height {
+                    var x: CGFloat = 11.0
+                    while x < size.width {
+                        let rect = CGRect(x: x - radius, y: y - radius, width: radius * 2, height: radius * 2)
+                        context.fill(Path(ellipseIn: rect), with: .color(dotColor))
+                        x += step
+                    }
+                    y += step
+                }
+            }
+        }
+        .ignoresSafeArea()
     }
 }
 
-/// 1px crisp outline button with warm surface and sand border.
-struct MonochromeOutlineButtonStyle: ButtonStyle {
+// MARK: - Neo-Brutalist Button Styles
+
+/// Primary Neo-Brutalist Pill Button: Signal Red (#FF3B2F) or Gold Yellow (#FFCE4A) with 2pt Ink border + hard offset shadow.
+struct MonochromePrimaryButtonStyle: ButtonStyle {
     var isCompact: Bool = false
+    var fill: Color = DesignTokens.accentRed
+    var foreground: Color = DesignTokens.cardWhite
 
     func makeBody(configuration: Configuration) -> some View {
+        let offset: CGFloat = configuration.isPressed ? 1.0 : (isCompact ? 2.5 : 3.0)
+        let pressShift: CGFloat = configuration.isPressed ? 1.5 : 0.0
+
         configuration.label
-            .font(.system(size: isCompact ? 12 : 13, weight: .medium))
-            .tracking(-0.02)
-            .foregroundStyle(DesignTokens.inkPrimary)
+            .font(.system(size: isCompact ? 11.5 : 13, weight: .heavy))
+            .foregroundStyle(foreground)
             .padding(.horizontal, isCompact ? 12 : 16)
             .frame(height: isCompact ? 28 : 34)
             .background(
-                configuration.isPressed ? DesignTokens.surfaceSubtle : DesignTokens.surface,
-                in: RoundedRectangle(cornerRadius: DesignTokens.radiusMd)
+                ZStack {
+                    Capsule()
+                        .fill(DesignTokens.ink)
+                        .offset(x: offset, y: offset)
+                    Capsule()
+                        .fill(fill)
+                    Capsule()
+                        .strokeBorder(DesignTokens.ink, lineWidth: 2)
+                }
             )
-            .overlay(
-                RoundedRectangle(cornerRadius: DesignTokens.radiusMd)
-                    .stroke(DesignTokens.border, lineWidth: 1)
-            )
-            .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
-            .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
+            .offset(x: pressShift, y: pressShift)
+            .padding(.trailing, 3)
+            .padding(.bottom, 3)
+            .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
     }
 }
 
-/// Ghost button (no border, warm hover fill).
+/// Secondary Neo-Brutalist Outline Pill Button: Warm Yellow or White fill with 2pt Ink border + hard offset shadow.
+struct MonochromeOutlineButtonStyle: ButtonStyle {
+    var isCompact: Bool = false
+    var fill: Color = DesignTokens.accentYellow
+
+    func makeBody(configuration: Configuration) -> some View {
+        let offset: CGFloat = configuration.isPressed ? 1.0 : 2.5
+        let pressShift: CGFloat = configuration.isPressed ? 1.5 : 0.0
+
+        configuration.label
+            .font(.system(size: isCompact ? 11.5 : 12.5, weight: .heavy))
+            .foregroundStyle(DesignTokens.ink)
+            .padding(.horizontal, isCompact ? 12 : 14)
+            .frame(height: isCompact ? 28 : 32)
+            .background(
+                ZStack {
+                    Capsule()
+                        .fill(DesignTokens.ink)
+                        .offset(x: offset, y: offset)
+                    Capsule()
+                        .fill(configuration.isPressed ? DesignTokens.paperDeep : fill)
+                    Capsule()
+                        .strokeBorder(DesignTokens.ink, lineWidth: 2)
+                }
+            )
+            .offset(x: pressShift, y: pressShift)
+            .padding(.trailing, 3)
+            .padding(.bottom, 3)
+            .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
+    }
+}
+
+/// Ghost button with crisp ink border on hover/press.
 struct MonochromeGhostButtonStyle: ButtonStyle {
     var isCompact: Bool = false
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: isCompact ? 12 : 13, weight: .medium))
-            .tracking(-0.02)
-            .foregroundStyle(DesignTokens.inkSecondary)
+            .font(.system(size: isCompact ? 11.5 : 12.5, weight: .bold))
+            .foregroundStyle(DesignTokens.inkSoft)
             .padding(.horizontal, isCompact ? 8 : 12)
-            .frame(height: isCompact ? 28 : 34)
+            .frame(height: isCompact ? 26 : 30)
             .background(
-                configuration.isPressed ? DesignTokens.surface : Color.clear,
-                in: RoundedRectangle(cornerRadius: DesignTokens.radiusMd)
+                configuration.isPressed ? DesignTokens.paperDeep : Color.clear,
+                in: RoundedRectangle(cornerRadius: DesignTokens.radiusSm)
             )
     }
 }
 
-// MARK: - View Modifiers
+// MARK: - Neo-Brutalist Card & Pill View Modifiers
 
-struct MonochromeCardModifier: ViewModifier {
-    var radius: CGFloat = DesignTokens.radiusLg
+struct LofiCardModifier: ViewModifier {
+    var fill: Color = DesignTokens.cardWhite
+    var radius: CGFloat = DesignTokens.radiusXl
+    var borderWidth: CGFloat = 2.0
+    var shadowOffset: CGFloat = 4.0
     var padding: CGFloat = 16
 
     func body(content: Content) -> some View {
         content
             .padding(padding)
-            .background(DesignTokens.surface, in: RoundedRectangle(cornerRadius: radius))
-            .overlay(
-                RoundedRectangle(cornerRadius: radius)
-                    .stroke(DesignTokens.borderPrimary, lineWidth: 1)
+            .background(
+                ZStack {
+                    RoundedRectangle(cornerRadius: radius)
+                        .fill(DesignTokens.ink)
+                        .offset(x: shadowOffset, y: shadowOffset)
+                    RoundedRectangle(cornerRadius: radius)
+                        .fill(fill)
+                    RoundedRectangle(cornerRadius: radius)
+                        .strokeBorder(DesignTokens.ink, lineWidth: borderWidth)
+                }
             )
+            .padding(.trailing, shadowOffset)
+            .padding(.bottom, shadowOffset)
     }
 }
 
@@ -265,17 +322,43 @@ struct MonochromeSubCardModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .padding(padding)
-            .background(DesignTokens.surfaceSubtle, in: RoundedRectangle(cornerRadius: radius))
+            .background(DesignTokens.paperBg, in: RoundedRectangle(cornerRadius: radius))
             .overlay(
                 RoundedRectangle(cornerRadius: radius)
-                    .stroke(DesignTokens.borderSubtle, lineWidth: 1)
+                    .strokeBorder(DesignTokens.ink, lineWidth: 1.5)
             )
     }
 }
 
 extension View {
-    func monochromeCard(radius: CGFloat = DesignTokens.radiusLg, padding: CGFloat = 16) -> some View {
-        modifier(MonochromeCardModifier(radius: radius, padding: padding))
+    func lofiCard(
+        fill: Color = DesignTokens.cardWhite,
+        radius: CGFloat = DesignTokens.radiusXl,
+        borderWidth: CGFloat = 2.0,
+        shadowOffset: CGFloat = 4.0,
+        padding: CGFloat = 16
+    ) -> some View {
+        modifier(LofiCardModifier(
+            fill: fill,
+            radius: radius,
+            borderWidth: borderWidth,
+            shadowOffset: shadowOffset,
+            padding: padding
+        ))
+    }
+
+    func monochromeCard(
+        radius: CGFloat = DesignTokens.radiusXl,
+        padding: CGFloat = 16,
+        fill: Color = DesignTokens.cardWhite
+    ) -> some View {
+        modifier(LofiCardModifier(
+            fill: fill,
+            radius: radius,
+            borderWidth: 2.0,
+            shadowOffset: 4.0,
+            padding: padding
+        ))
     }
 
     func monochromeSubCard(radius: CGFloat = DesignTokens.radiusMd, padding: CGFloat = 12) -> some View {
@@ -283,12 +366,11 @@ extension View {
     }
 
     func monochromeCanvas() -> some View {
-        background(DesignTokens.canvas)
+        background(PaperDotGridBackground())
     }
 
-    // Legacy helpers
     func adminCanvasBackground() -> some View {
-        background(DesignTokens.canvas)
+        background(PaperDotGridBackground())
     }
 
     func adminCard() -> some View {
@@ -338,7 +420,6 @@ public struct DictationRecord: Identifiable, Codable, Equatable {
 }
 
 /// On-device storage for past voice dictation sessions.
-/// Persists records locally to UserDefaults with JSON encoding.
 @MainActor
 public final class DictationHistoryStore: ObservableObject {
     public static let shared = DictationHistoryStore()
@@ -352,7 +433,6 @@ public final class DictationHistoryStore: ObservableObject {
         load()
     }
 
-    /// Records a new dictation transcript and saves to persistent storage.
     @discardableResult
     public func record(text: String, appName: String = "", durationSeconds: Double = 0.0) -> DictationRecord? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -373,25 +453,21 @@ public final class DictationHistoryStore: ObservableObject {
         return item
     }
 
-    /// Deletes a specific record by its unique ID.
     public func delete(id: UUID) {
         records.removeAll { $0.id == id }
         save()
     }
 
-    /// Deletes records at specified index offsets.
     public func delete(at offsets: IndexSet) {
         records.remove(atOffsets: offsets)
         save()
     }
 
-    /// Clears all recorded dictations.
     public func clearAll() {
         records.removeAll()
         save()
     }
 
-    /// Searches records matching query in transcript or app name.
     public func search(query: String) -> [DictationRecord] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return records }
@@ -427,4 +503,3 @@ public final class DictationHistoryStore: ObservableObject {
     }
 }
 #endif
-

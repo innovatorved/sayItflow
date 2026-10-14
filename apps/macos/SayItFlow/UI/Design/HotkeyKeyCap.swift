@@ -1,22 +1,29 @@
 import SwiftUI
 
-/// Precision technical keycap as defined in Ved Gupta design system
+/// Neo-Brutalist technical keycap with 1.5pt Ink border and hard offset shadow
 struct HotkeyKeyCap: View {
     let label: String
     var isEmphasized: Bool = false
 
     var body: some View {
         Text(label)
-            .font(.system(size: 11, weight: .medium, design: .monospaced))
-            .tracking(0.02)
-            .foregroundStyle(isEmphasized ? DesignTokens.textPrimary : DesignTokens.textSecondary)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 3)
-            .background(DesignTokens.surfaceSecondary, in: RoundedRectangle(cornerRadius: DesignTokens.radiusSm))
-            .overlay(
-                RoundedRectangle(cornerRadius: DesignTokens.radiusSm)
-                    .stroke(DesignTokens.borderPrimary, lineWidth: 1)
+            .font(.system(size: 11, weight: .heavy, design: .monospaced))
+            .foregroundStyle(DesignTokens.ink)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 4)
+            .background(
+                ZStack {
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(DesignTokens.ink)
+                        .offset(x: 2, y: 2)
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(isEmphasized ? DesignTokens.accentYellow : DesignTokens.paperDeep)
+                    RoundedRectangle(cornerRadius: 6)
+                        .strokeBorder(DesignTokens.ink, lineWidth: 1.5)
+                }
             )
+            .padding(.trailing, 2)
+            .padding(.bottom, 2)
     }
 }
 
@@ -28,9 +35,8 @@ struct HotkeyInstructionRow: View {
         HStack(alignment: .center, spacing: 12) {
             HotkeyKeyCap(label: keyLabel, isEmphasized: true)
             Text(hint)
-                .font(.system(size: 13, weight: .regular))
-                .tracking(-0.01)
-                .foregroundStyle(DesignTokens.textSecondary)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(DesignTokens.inkSoft)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .accessibilityElement(children: .combine)

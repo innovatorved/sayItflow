@@ -57,34 +57,41 @@ struct DashboardView: View {
     }
 
     var body: some View {
-        NavigationSplitView {
-            List(selection: $selection) {
-                Section {
-                    ForEach(MainWindowSection.allCases) { section in
-                        Label(section.title, systemImage: section.symbol)
-                            .tag(section)
+        VStack(spacing: 0) {
+            lofiTopHeaderBar
+            lofiTickerStrip
+
+            NavigationSplitView {
+                List(selection: $selection) {
+                    Section {
+                        ForEach(MainWindowSection.allCases) { section in
+                            Label(section.title, systemImage: section.symbol)
+                                .font(.system(size: 13, weight: .bold))
+                                .tag(section)
+                        }
+                    } header: {
+                        Text("STUDIO MENU")
+                            .font(.system(size: 10, weight: .heavy, design: .monospaced))
+                            .tracking(1.0)
+                            .foregroundStyle(DesignTokens.textSecondary)
                     }
-                } header: {
-                    Text("MENU")
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
-                        .foregroundStyle(DesignTokens.textMuted)
                 }
-            }
-            .scrollContentBackground(.hidden)
-            .background(DesignTokens.surface)
-            .navigationSplitViewColumnWidth(min: 200, ideal: 220)
-        } detail: {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    headerView
-                    detailContent
+                .scrollContentBackground(.hidden)
+                .background(DesignTokens.paperDeep)
+                .navigationSplitViewColumnWidth(min: 200, ideal: 220)
+            } detail: {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        headerView
+                        detailContent
+                    }
+                    .padding(24)
                 }
-                .padding(24)
+                .frame(minWidth: 560, minHeight: 480)
+                .monochromeCanvas()
             }
-            .frame(minWidth: 560, minHeight: 520)
-            .monochromeCanvas()
         }
-        .frame(minWidth: 860, minHeight: 620)
+        .frame(minWidth: 880, minHeight: 640)
         .onAppear {
             if let initialSection {
                 selection = initialSection
@@ -111,29 +118,84 @@ struct DashboardView: View {
         }
     }
 
+    // MARK: - Monitor YT Lo-Fi Top Header & Ticker Strip
+
+    private var lofiTopHeaderBar: some View {
+        HStack(alignment: .center, spacing: 12) {
+            BrandLockup(
+                size: .md,
+                title: "SayItFlow",
+                tagline: "ON-DEVICE VOICE STUDIO"
+            )
+
+            Spacer()
+
+            StatusBadge(
+                kind: appState.statusLabel == "Ready" ? .granted : (appState.statusLabel == "Listening…" ? .info : .warning),
+                text: appState.statusLabel.uppercased(),
+                showDot: true
+            )
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .background(DesignTokens.canvas)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(DesignTokens.border)
+                .frame(height: 2)
+        }
+    }
+
+    private var lofiTickerStrip: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(appState.statusLabel == "Listening…" ? DesignTokens.accentRed : DesignTokens.accentTeal)
+                .frame(width: 7, height: 7)
+            Text(
+                appState.statusLabel == "Listening…"
+                    ? "LIVE AUDIO · RELEASE TO TRANSCRIBE"
+                    : "READY · HOLD \(settings.hotkeyMode.label.uppercased()) TO DICTATE"
+            )
+            .font(DesignTokens.fontMono(size: 10, weight: .bold))
+            .tracking(0.8)
+            .foregroundStyle(DesignTokens.canvas)
+
+            Spacer()
+
+            Text("★ S1-MINI CLEANUP")
+                .font(DesignTokens.fontMono(size: 10, weight: .bold))
+                .tracking(0.6)
+                .foregroundStyle(DesignTokens.accentYellow)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 6)
+        .background(DesignTokens.inkPrimary)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(DesignTokens.border)
+                .frame(height: 2)
+        }
+    }
+
     private var headerView: some View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(selection.title)
-                    .font(.system(size: 24, weight: .semibold))
+                    .font(.system(size: 24, weight: .black))
                     .tracking(-0.04)
                     .foregroundStyle(DesignTokens.textPrimary)
 
                 Text(subtitleForSection(selection))
-                    .font(.system(size: 13))
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(DesignTokens.textSecondary)
             }
             Spacer()
 
             if selection == .status {
-                StatusBadge(
-                    kind: appState.statusLabel == "Ready" ? .granted : (appState.statusLabel == "Listening…" ? .info : .warning),
-                    text: appState.statusLabel,
-                    showDot: true
-                )
+                HotkeyKeyCap(label: "Hold \(settings.hotkeyMode.label)", isEmphasized: true)
             }
         }
-        .padding(.bottom, 8)
+        .padding(.bottom, 4)
     }
 
     private func subtitleForSection(_ section: MainWindowSection) -> String {
@@ -168,18 +230,18 @@ struct DashboardView: View {
     // MARK: - Status Detail
 
     private var statusDetail: some View {
-        VStack(spacing: 12) {
-            // Models Card (Compact)
+        VStack(spacing: 16) {
+            // Models Card (Compact Neo-Brutalist White Card)
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     Text("ON-DEVICE AI MODELS")
-                        .font(DesignTokens.fontMono(size: 10, weight: .medium))
+                        .font(DesignTokens.fontMono(size: 10, weight: .bold))
                         .tracking(DesignTokens.trackingLoose)
-                        .foregroundStyle(DesignTokens.textMuted)
+                        .foregroundStyle(DesignTokens.textPrimary)
                     Spacer()
-                    Text("100% Private · Apple Silicon")
-                        .font(DesignTokens.fontMono(size: 9))
-                        .foregroundStyle(DesignTokens.textMuted)
+                    Text("100% PRIVATE · APPLE SILICON")
+                        .font(DesignTokens.fontMono(size: 9, weight: .bold))
+                        .foregroundStyle(DesignTokens.textSecondary)
                 }
 
                 // Row 1: Voz STT
@@ -187,18 +249,22 @@ struct DashboardView: View {
                     VStack(alignment: .leading, spacing: 3) {
                         HStack(spacing: 6) {
                             Text(engineSettings.sttModelName)
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(.system(size: 13, weight: .heavy))
                                 .foregroundStyle(DesignTokens.textPrimary)
                                 .lineLimit(1)
                             Text("STT")
-                                .font(DesignTokens.fontMono(size: 9, weight: .medium))
-                                .foregroundStyle(DesignTokens.textMuted)
-                                .padding(.horizontal, 4)
-                                .padding(.vertical, 1)
-                                .background(DesignTokens.borderSubtle.opacity(0.5), in: RoundedRectangle(cornerRadius: 3))
+                                .font(DesignTokens.fontMono(size: 9, weight: .bold))
+                                .foregroundStyle(DesignTokens.textPrimary)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 2)
+                                .background(DesignTokens.accentYellow, in: RoundedRectangle(cornerRadius: 4))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .stroke(DesignTokens.border, lineWidth: 1.5)
+                                )
                         }
                         Text("Parakeet 0.6B · 467 MB · Neural Engine · 25 Langs")
-                            .font(.system(size: 10))
+                            .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(DesignTokens.textSecondary)
                     }
                     Spacer()
@@ -206,7 +272,7 @@ struct DashboardView: View {
                         ProgressView(value: max(vozEngine.downloadProgress, 0.05))
                             .frame(width: 80)
                     } else if vozEngine.isDownloaded {
-                        StatusBadge(kind: .granted, text: "Ready")
+                        StatusBadge(kind: .granted, text: "READY")
                     } else {
                         Button("Download (467 MB)") {
                             Task { try? await vozEngine.downloadModel() }
@@ -222,18 +288,22 @@ struct DashboardView: View {
                     VStack(alignment: .leading, spacing: 3) {
                         HStack(spacing: 6) {
                             Text("S1-mini")
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(.system(size: 13, weight: .heavy))
                                 .foregroundStyle(DesignTokens.textPrimary)
                                 .lineLimit(1)
-                            Text("Normalizer")
-                                .font(DesignTokens.fontMono(size: 9, weight: .medium))
-                                .foregroundStyle(DesignTokens.textMuted)
-                                .padding(.horizontal, 4)
-                                .padding(.vertical, 1)
-                                .background(DesignTokens.borderSubtle.opacity(0.5), in: RoundedRectangle(cornerRadius: 3))
+                            Text("CLEANUP")
+                                .font(DesignTokens.fontMono(size: 9, weight: .bold))
+                                .foregroundStyle(DesignTokens.textPrimary)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 2)
+                                .background(DesignTokens.cardMint, in: RoundedRectangle(cornerRadius: 4))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .stroke(DesignTokens.border, lineWidth: 1.5)
+                                )
                         }
                         Text("Superwhisper · Qwen3 0.6B · 462 MB · Metal GPU")
-                            .font(.system(size: 10))
+                            .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(DesignTokens.textSecondary)
                     }
                     Spacer()
@@ -241,7 +311,7 @@ struct DashboardView: View {
                         ProgressView(value: max(s1Mini.downloadProgress, 0.05))
                             .frame(width: 80)
                     } else if s1Mini.isDownloaded {
-                        StatusBadge(kind: .granted, text: "Ready")
+                        StatusBadge(kind: .granted, text: "READY")
                     } else {
                         Button("Download (462 MB)") {
                             Task { try? await s1Mini.downloadModel() }
@@ -253,34 +323,34 @@ struct DashboardView: View {
                 Divider().overlay(DesignTokens.borderSubtle)
 
                 Text("Desert Ant Voz (DAL Source-Available 1.0) · S1-mini by Superwhisper (Apache 2.0). All processing is 100% on-device.")
-                    .font(.system(size: 10))
+                    .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(DesignTokens.textMuted)
             }
-            .monochromeCard(radius: DesignTokens.radiusMd, padding: 12)
+            .monochromeCard(radius: DesignTokens.radiusMd, padding: 14, fill: DesignTokens.cardWhite)
 
-            // Try Dictation Card
+            // Try Dictation Card (Butter Neo-Brutalist Card matching Android Studio)
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
-                    Text("Interactive Dictation Test")
-                        .font(.system(size: 13, weight: .semibold))
-                        .tracking(-0.02)
+                    Text("TRY HOLD-TO-TALK DICTATION")
+                        .font(DesignTokens.fontMono(size: 11, weight: .bold))
+                        .tracking(0.8)
                         .foregroundStyle(DesignTokens.textPrimary)
                     Spacer()
                     HotkeyKeyCap(label: settings.hotkeyMode.label, isEmphasized: true)
                 }
 
-                Text("Hold \(settings.hotkeyMode.label), speak naturally, and release to transcribe instantly.")
-                    .font(.system(size: 11))
+                Text("Click inside the box below, hold \(settings.hotkeyMode.label), speak naturally, and release to insert.")
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(DesignTokens.textSecondary)
 
                 TextEditor(text: $demoText)
-                    .font(.system(size: 13))
-                    .frame(minHeight: 80)
-                    .padding(8)
-                    .background(DesignTokens.surfaceSubtle, in: RoundedRectangle(cornerRadius: DesignTokens.radiusMd))
+                    .font(.system(size: 13, weight: .medium))
+                    .frame(minHeight: 88)
+                    .padding(10)
+                    .background(DesignTokens.cardWhite, in: RoundedRectangle(cornerRadius: DesignTokens.radiusMd))
                     .overlay(
                         RoundedRectangle(cornerRadius: DesignTokens.radiusMd)
-                            .stroke(DesignTokens.borderSubtle, lineWidth: 1)
+                            .stroke(DesignTokens.border, lineWidth: DesignTokens.borderWidth)
                     )
 
                 if !demoText.isEmpty {
@@ -291,7 +361,7 @@ struct DashboardView: View {
                     }
                 }
             }
-            .monochromeCard(radius: DesignTokens.radiusMd, padding: 12)
+            .monochromeCard(radius: DesignTokens.radiusMd, padding: 14, fill: DesignTokens.cardButter)
         }
     }
 
@@ -301,7 +371,7 @@ struct DashboardView: View {
         VStack(spacing: 16) {
             VStack(alignment: .leading, spacing: 14) {
                 Text("Trigger Shortcut")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: 14, weight: .heavy))
                     .tracking(-0.02)
                     .foregroundStyle(DesignTokens.textPrimary)
 
@@ -315,7 +385,7 @@ struct DashboardView: View {
                 if settings.hotkeyMode == .custom {
                     HStack {
                         Text("Custom Shortcut:")
-                            .font(.system(size: 12))
+                            .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(DesignTokens.textSecondary)
                         KeyboardShortcuts.Recorder("", name: .pushToTalk)
                     }
@@ -323,20 +393,20 @@ struct DashboardView: View {
                 }
 
                 Text("Hold for >0.25s to start dictating; quick tap types a normal character.")
-                    .font(.system(size: 11))
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(DesignTokens.textMuted)
             }
-            .monochromeCard()
+            .monochromeCard(fill: DesignTokens.cardButter)
 
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .center) {
                     VStack(alignment: .leading, spacing: 3) {
                         Text("Spoken Language")
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.system(size: 14, weight: .heavy))
                             .tracking(-0.02)
                             .foregroundStyle(DesignTokens.textPrimary)
                         Text("Only the 25 languages supported by Voz are available. Default is English.")
-                            .font(.system(size: 11))
+                            .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(DesignTokens.textSecondary)
                     }
                     Spacer()
@@ -352,15 +422,15 @@ struct DashboardView: View {
 
                 HStack(spacing: 8) {
                     Image(systemName: "info.circle")
-                        .font(.system(size: 12))
-                        .foregroundStyle(DesignTokens.textMuted)
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(DesignTokens.textPrimary)
                     Text("Voz does not auto-detect spoken language. Specifying your language ensures accurate on-device transcription (7.40% WER) with zero CPU/GPU overhead.")
-                        .font(.system(size: 11))
+                        .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(DesignTokens.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .monochromeCard()
+            .monochromeCard(fill: DesignTokens.cardMint)
         }
     }
 
@@ -374,15 +444,15 @@ struct DashboardView: View {
                     VStack(alignment: .leading, spacing: 3) {
                         HStack(spacing: 6) {
                             Text("S1-mini Normalization")
-                                .font(.system(size: 14, weight: .semibold))
+                                .font(.system(size: 14, weight: .heavy))
                                 .tracking(-0.02)
                                 .foregroundStyle(DesignTokens.textPrimary)
                             Text("by Superwhisper")
-                                .font(.system(size: 11, weight: .medium))
+                                .font(.system(size: 11, weight: .bold))
                                 .foregroundStyle(DesignTokens.textMuted)
                         }
                         Text("On-device causal LM that cleans fillers (um, uh, like), corrects punctuation, numbers, and formats text.")
-                            .font(.system(size: 11))
+                            .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(DesignTokens.textSecondary)
                     }
                     Spacer()
@@ -397,7 +467,7 @@ struct DashboardView: View {
                     VStack(alignment: .leading, spacing: 10) {
                         HStack {
                             Text("Styling")
-                                .font(.system(size: 12, weight: .medium))
+                                .font(.system(size: 12, weight: .bold))
                                 .foregroundStyle(DesignTokens.textSecondary)
                                 .frame(width: 80, alignment: .leading)
                             Picker("", selection: $s1Mini.styling) {
@@ -410,7 +480,7 @@ struct DashboardView: View {
 
                         HStack {
                             Text("Structure")
-                                .font(.system(size: 12, weight: .medium))
+                                .font(.system(size: 12, weight: .bold))
                                 .foregroundStyle(DesignTokens.textSecondary)
                                 .frame(width: 80, alignment: .leading)
                             Picker("", selection: $s1Mini.structure) {
@@ -423,7 +493,7 @@ struct DashboardView: View {
 
                         HStack {
                             Text("Context")
-                                .font(.system(size: 12, weight: .medium))
+                                .font(.system(size: 12, weight: .bold))
                                 .foregroundStyle(DesignTokens.textSecondary)
                                 .frame(width: 80, alignment: .leading)
                             Picker("", selection: $s1Mini.context) {
@@ -442,33 +512,36 @@ struct DashboardView: View {
                         VStack(alignment: .leading, spacing: 3) {
                             HStack(spacing: 6) {
                                 Text("Model Weights (462 MB)")
-                                    .font(.system(size: 12, weight: .medium))
+                                    .font(.system(size: 12, weight: .bold))
                                     .foregroundStyle(DesignTokens.textPrimary)
                                 if s1Mini.isDownloaded {
-                                    Text("Ready")
+                                    Text("READY")
                                         .font(.system(size: 10, weight: .bold, design: .monospaced))
                                         .padding(.horizontal, 6)
                                         .padding(.vertical, 2)
-                                        .background(DesignTokens.surfaceSubtle, in: Capsule())
+                                        .background(DesignTokens.cardMint, in: Capsule())
+                                        .overlay(Capsule().stroke(DesignTokens.border, lineWidth: 1.5))
                                         .foregroundStyle(DesignTokens.textPrimary)
                                 } else if s1Mini.isDownloading {
                                     Text("Downloading \(Int(s1Mini.downloadProgress * 100))%")
                                         .font(.system(size: 10, weight: .bold, design: .monospaced))
                                         .padding(.horizontal, 6)
                                         .padding(.vertical, 2)
-                                        .background(DesignTokens.surfaceSubtle, in: Capsule())
-                                        .foregroundStyle(DesignTokens.textSecondary)
+                                        .background(DesignTokens.cardButter, in: Capsule())
+                                        .overlay(Capsule().stroke(DesignTokens.border, lineWidth: 1.5))
+                                        .foregroundStyle(DesignTokens.textPrimary)
                                 } else {
-                                    Text("Optional")
+                                    Text("OPTIONAL")
                                         .font(.system(size: 10, weight: .bold, design: .monospaced))
                                         .padding(.horizontal, 6)
                                         .padding(.vertical, 2)
                                         .background(DesignTokens.surfaceSubtle, in: Capsule())
-                                        .foregroundStyle(DesignTokens.textMuted)
+                                        .overlay(Capsule().stroke(DesignTokens.border, lineWidth: 1.5))
+                                        .foregroundStyle(DesignTokens.textSecondary)
                                 }
                             }
                             Text(s1Mini.isDownloaded ? "Running on-device with zero cloud calls." : "When not downloaded, high-speed built-in rules normalize your text.")
-                                .font(.system(size: 11))
+                                .font(.system(size: 11, weight: .medium))
                                 .foregroundStyle(DesignTokens.textMuted)
                         }
                         Spacer()
@@ -493,38 +566,38 @@ struct DashboardView: View {
 
                     if let error = s1Mini.lastError {
                         Text(error)
-                            .font(.system(size: 11))
-                            .foregroundStyle(.red)
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(DesignTokens.accentRed)
                     }
 
                     Divider().overlay(DesignTokens.borderSubtle)
 
                     HStack(spacing: 8) {
                         Image(systemName: "info.circle")
-                            .font(.system(size: 12))
-                            .foregroundStyle(DesignTokens.textMuted)
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(DesignTokens.textPrimary)
                         Text("S1-mini is fine-tuned for English. For the other 24 languages supported by Voz, transcripts are passed directly without modification.")
-                            .font(.system(size: 11))
+                            .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(DesignTokens.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
-            .monochromeCard()
+            .monochromeCard(fill: DesignTokens.cardWhite)
 
             // Audio & Feedback Card
             VStack(alignment: .leading, spacing: 14) {
                 Text("Audio & Feedback")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: 14, weight: .heavy))
                     .tracking(-0.02)
                     .foregroundStyle(DesignTokens.textPrimary)
 
                 Toggle("Sound feedback on start & stop", isOn: $settings.soundFeedbackEnabled)
-                    .font(.system(size: 13))
+                    .font(.system(size: 13, weight: .medium))
                 Toggle("Launch SayItFlow at login", isOn: $settings.launchAtLogin)
-                    .font(.system(size: 13))
+                    .font(.system(size: 13, weight: .medium))
             }
-            .monochromeCard()
+            .monochromeCard(fill: DesignTokens.cardButter)
         }
     }
 
@@ -537,10 +610,10 @@ struct DashboardView: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(kind.title)
-                            .font(.system(size: 14, weight: .medium))
+                            .font(.system(size: 14, weight: .heavy))
                             .foregroundStyle(DesignTokens.textPrimary)
                         Text(kind.detail)
-                            .font(.system(size: 12))
+                            .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(DesignTokens.textSecondary)
                     }
                     Spacer()
@@ -553,7 +626,10 @@ struct DashboardView: View {
                         .disabled(fixingKind != nil)
                     }
                 }
-                .monochromeCard(padding: 12)
+                .monochromeCard(
+                    padding: 14,
+                    fill: status == .granted ? DesignTokens.cardMint : DesignTokens.cardPeach
+                )
             }
         }
     }
@@ -566,53 +642,53 @@ struct DashboardView: View {
                 BrandLockup(
                     size: .lg,
                     title: "SayItFlow",
-                    tagline: "Ultra-fast On-Device Voice Dictation"
+                    tagline: "ON-DEVICE VOICE STUDIO"
                 )
 
                 Text("SayItFlow provides push-to-talk voice dictation that runs completely on-device on Apple Silicon Neural Engine using Desert Ant's Voz model. Zero cloud calls, zero latency penalty, and 100% data privacy.")
-                    .font(.system(size: 13))
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(DesignTokens.textSecondary)
 
                 Divider().overlay(DesignTokens.borderSubtle)
 
                 Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 6) {
                     GridRow {
-                        Text("Version").font(.system(size: 12)).foregroundStyle(DesignTokens.textSecondary)
-                        Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.5.0")
-                            .font(.system(size: 12, design: .monospaced))
+                        Text("Version").font(.system(size: 12, weight: .bold)).foregroundStyle(DesignTokens.textSecondary)
+                        Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.6.0")
+                            .font(.system(size: 12, weight: .bold, design: .monospaced))
                             .foregroundStyle(DesignTokens.textPrimary)
                     }
                     GridRow {
-                        Text("Speech Engine").font(.system(size: 12)).foregroundStyle(DesignTokens.textSecondary)
-                        Text("Desert Ant Voz (Apple Neural Engine)").font(.system(size: 12)).foregroundStyle(DesignTokens.textPrimary)
+                        Text("Speech Engine").font(.system(size: 12, weight: .bold)).foregroundStyle(DesignTokens.textSecondary)
+                        Text("Desert Ant Voz (Apple Neural Engine)").font(.system(size: 12, weight: .medium)).foregroundStyle(DesignTokens.textPrimary)
                     }
                     GridRow {
-                        Text("Text Normalizer").font(.system(size: 12)).foregroundStyle(DesignTokens.textSecondary)
-                        Text("\"S1-mini\" by \"Superwhisper\"").font(.system(size: 12)).foregroundStyle(DesignTokens.textPrimary)
+                        Text("Text Normalizer").font(.system(size: 12, weight: .bold)).foregroundStyle(DesignTokens.textSecondary)
+                        Text("\"S1-mini\" by \"Superwhisper\"").font(.system(size: 12, weight: .medium)).foregroundStyle(DesignTokens.textPrimary)
                     }
                     GridRow {
-                        Text("Design System").font(.system(size: 12)).foregroundStyle(DesignTokens.textSecondary)
-                        Text("Ved Gupta Monochromatic Precision").font(.system(size: 12)).foregroundStyle(DesignTokens.textPrimary)
+                        Text("Design System").font(.system(size: 12, weight: .bold)).foregroundStyle(DesignTokens.textSecondary)
+                        Text("Monitor YT Lo-Fi Paper & Ink Neo-Brutalism").font(.system(size: 12, weight: .bold)).foregroundStyle(DesignTokens.textPrimary)
                     }
                     GridRow {
-                        Text("App License").font(.system(size: 12)).foregroundStyle(DesignTokens.textSecondary)
-                        Text("MIT © innovatorved").font(.system(size: 12)).foregroundStyle(DesignTokens.textPrimary)
+                        Text("App License").font(.system(size: 12, weight: .bold)).foregroundStyle(DesignTokens.textSecondary)
+                        Text("MIT © innovatorved").font(.system(size: 12, weight: .medium)).foregroundStyle(DesignTokens.textPrimary)
                     }
                     GridRow {
-                        Text("Voz License").font(.system(size: 12)).foregroundStyle(DesignTokens.textSecondary)
-                        Text("Desert Ant Labs Source-Available 1.0").font(.system(size: 12)).foregroundStyle(DesignTokens.textPrimary)
+                        Text("Voz License").font(.system(size: 12, weight: .bold)).foregroundStyle(DesignTokens.textSecondary)
+                        Text("Desert Ant Labs Source-Available 1.0").font(.system(size: 12, weight: .medium)).foregroundStyle(DesignTokens.textPrimary)
                     }
                     GridRow {
-                        Text("S1-mini License").font(.system(size: 12)).foregroundStyle(DesignTokens.textSecondary)
-                        Text("Apache 2.0 (superwhisper.com)").font(.system(size: 12)).foregroundStyle(DesignTokens.textPrimary)
+                        Text("S1-mini License").font(.system(size: 12, weight: .bold)).foregroundStyle(DesignTokens.textSecondary)
+                        Text("Apache 2.0 (superwhisper.com)").font(.system(size: 12, weight: .medium)).foregroundStyle(DesignTokens.textPrimary)
                     }
                     GridRow {
-                        Text("Attribution").font(.system(size: 12)).foregroundStyle(DesignTokens.textSecondary)
-                        Text("Desert Ant Labs B.V. & Superwhisper").font(.system(size: 12)).foregroundStyle(DesignTokens.textPrimary)
+                        Text("Attribution").font(.system(size: 12, weight: .bold)).foregroundStyle(DesignTokens.textSecondary)
+                        Text("Desert Ant Labs B.V. & Superwhisper").font(.system(size: 12, weight: .medium)).foregroundStyle(DesignTokens.textPrimary)
                     }
                 }
             }
-            .monochromeCard()
+            .monochromeCard(fill: DesignTokens.cardButter)
         }
     }
 

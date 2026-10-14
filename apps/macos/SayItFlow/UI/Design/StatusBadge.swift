@@ -10,73 +10,58 @@ enum StatusBadgeKind {
 
     var label: String {
         switch self {
-        case .granted: "Granted"
+        case .granted: "Ready"
         case .denied: "Denied"
-        case .pending: "Not Set"
+        case .pending: "Setup"
         case .info: "Active"
         case .warning: "Warning"
         case .neutral: "Default"
         }
     }
 
-    var foreground: Color {
+    var fill: Color {
         switch self {
-        case .granted: DesignTokens.successFg
-        case .denied: DesignTokens.dangerFg
-        case .pending: DesignTokens.infoFg
-        case .info: DesignTokens.infoFg
-        case .warning: DesignTokens.warningFg
-        case .neutral: DesignTokens.textSecondary
-        }
-    }
-
-    var background: Color {
-        switch self {
-        case .granted: DesignTokens.successBg
-        case .denied: DesignTokens.dangerBg
-        case .pending: DesignTokens.infoBg
-        case .info: DesignTokens.infoBg
-        case .warning: DesignTokens.warningBg
-        case .neutral: DesignTokens.surfaceSubtle
-        }
-    }
-
-    var border: Color {
-        switch self {
-        case .granted: DesignTokens.successBorder
-        case .denied: DesignTokens.dangerBorder
-        case .pending: DesignTokens.infoBorder
-        case .info: DesignTokens.infoBorder
-        case .warning: DesignTokens.warningBorder
-        case .neutral: DesignTokens.borderPrimary
+        case .granted: DesignTokens.accentTeal
+        case .denied: DesignTokens.accentCoral
+        case .pending: DesignTokens.accentYellow
+        case .info: DesignTokens.accentYellow
+        case .warning: DesignTokens.accentYellow
+        case .neutral: DesignTokens.paperDeep
         }
     }
 }
 
-/// Soft-tint semantic badge with 1px border as defined in Ved Gupta design system
+/// Monitor YT Neo-Brutalist Status Pill with 2pt Ink border and 2.5pt hard offset shadow
 struct StatusBadge: View {
     let kind: StatusBadgeKind
     var text: String?
-    var showDot: Bool = false
+    var showDot: Bool = true
 
     var body: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: 6) {
             if showDot {
                 Circle()
-                    .fill(kind.foreground)
-                    .frame(width: 5, height: 5)
+                    .fill(DesignTokens.ink)
+                    .frame(width: 7, height: 7)
             }
             Text(text ?? kind.label)
-                .font(.system(size: 11, weight: .medium))
-                .tracking(-0.01)
-                .foregroundStyle(kind.foreground)
+                .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                .foregroundStyle(DesignTokens.ink)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 3)
-        .background(kind.background, in: RoundedRectangle(cornerRadius: DesignTokens.radiusSm))
-        .overlay(
-            RoundedRectangle(cornerRadius: DesignTokens.radiusSm)
-                .stroke(kind.border, lineWidth: 1)
+        .padding(.horizontal, 11)
+        .padding(.vertical, 5)
+        .background(
+            ZStack {
+                Capsule()
+                    .fill(DesignTokens.ink)
+                    .offset(x: 2.5, y: 2.5)
+                Capsule()
+                    .fill(kind.fill)
+                Capsule()
+                    .strokeBorder(DesignTokens.ink, lineWidth: 2)
+            }
         )
+        .padding(.trailing, 2.5)
+        .padding(.bottom, 2.5)
     }
 }

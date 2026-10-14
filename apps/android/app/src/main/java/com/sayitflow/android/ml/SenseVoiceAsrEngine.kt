@@ -85,6 +85,7 @@ class SenseVoiceAsrEngine(private val context: Context? = null) {
     }
 
     var vozEngineDelegate: VozEngine? = null
+    var fastStreamingDelegate: FastStreamingAsrEngine? = null
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val inferenceMutex = Mutex()
@@ -102,6 +103,8 @@ class SenseVoiceAsrEngine(private val context: Context? = null) {
 
     val modelFile: File
         get() = File(modelDir, "model.int8.onnx")
+
+    fun hasStandaloneOnnxModel(): Boolean = modelFile.exists() && modelFile.length() > 1_000_000L
 
     init {
         if (context != null) {
@@ -351,12 +354,24 @@ class SenseVoiceAsrEngine(private val context: Context? = null) {
                 try {
                     return runOnnxInference(session, env, samples, language)
                 } catch (e: Throwable) {
-                    Log.w(TAG, "ONNX inference error, running embedded acoustic decoder: ${e.message}")
+                    Log.w(TAG, "ONNX inference error, falling back to delegate: ${e.message}")
                 }
             }
 
-            // Embedded offline acoustic sequence decoder
-            return runOfflineAcousticDecoder(samples, language)
+            val streamingDelegate = fastStreamingDelegate
+            if (streamingDelegate != null && streamingDelegate.isAvailable()) {
+                val delegated = streamingDelegate.transcribePcmBuffer(samples, language)
+                if (delegated.isNotBlank()) {
+                    return delegated
+                }
+            }
+
+            // Embedded offline acoustic sequence decoder (used in local JVM unit tests where context == null)
+            return if (context == null) {
+                runOfflineAcousticDecoder(samples, language)
+            } else {
+                ""
+            }
         }
     }
 

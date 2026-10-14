@@ -231,9 +231,7 @@ class SayItFlowAccessibilityService : AccessibilityService() {
 
     private fun startDictationSession() {
         val asrMode = coordinator.asrEngineMode.value
-        val useStreaming =
-            asrMode == SayItFlowCoordinator.AsrEngineMode.INSTANT_STREAMING &&
-                coordinator.fastStreamingEngine.isAvailable()
+        val useStreaming = coordinator.shouldUseZeroLossStreamingPipe()
 
         if (useStreaming) {
             activeSessionStreaming = true
