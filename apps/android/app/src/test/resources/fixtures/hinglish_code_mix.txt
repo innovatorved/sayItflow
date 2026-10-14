@@ -1,0 +1,10 @@
+यह फ़ाइल सेव करो और गिटहब पे पुश कर दो	yeh file save karo aur github pe push kar do	Mixed devanagari and technical terms
+मैं आज बहुत खुश हूँ	main aaj bahut khush hoon	Common colloquial phrase with nasal hoon
+कल मिलते हैं भाई	kal milte hain bhai	Casual greeting with common words
+प्लीज़ मुझे रिपोर्ट सेंड कर दो	please mujhe report send kar do	Devanagari english loan words transliterated
+Code review complete हो गया है	Code review complete ho gaya hai	Latin english prefix with Hindi verb phrase
+Ye function create karo and deploy karo	Ye function create karo and deploy karo	Clean Romanized Hinglish preserved
+आप कैसे हो दोस्त	aap kaise ho dost	Polite conversational greeting
+काम जल्दी खत्म करना है	kaam jaldi khatam karna hai	Urgent action item
+थोड़ा टाइम लगेगा लेकिन सब ठीक हो जाएगा	thoda time lagega lekin sab theek ho jaega	Compound sentence with multiple conjunctions
+वहाँ पर कोई नहीं था	wahan par koi nahi tha	Existential sentence with negation

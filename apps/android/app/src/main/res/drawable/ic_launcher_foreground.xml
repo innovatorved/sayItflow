@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Waveform bars: Deep charcoal #141413 -->
+    <path
+        android:fillColor="#141413"
+        android:pathData="M 34.5,45.9 a 2.25,2.25 0 0 1 2.25,2.25 v 11.7 a 2.25,2.25 0 0 1 -4.5,0 v -11.7 a 2.25,2.25 0 0 1 2.25,-2.25 Z M 43.5,36 a 2.25,2.25 0 0 1 2.25,2.25 v 31.5 a 2.25,2.25 0 0 1 -4.5,0 v -31.5 a 2.25,2.25 0 0 1 2.25,-2.25 Z M 52.5,41.4 a 2.25,2.25 0 0 1 2.25,2.25 v 20.7 a 2.25,2.25 0 0 1 -4.5,0 v -20.7 a 2.25,2.25 0 0 1 2.25,-2.25 Z M 61.5,47.7 a 2.25,2.25 0 0 1 2.25,2.25 v 8.1 a 2.25,2.25 0 0 1 -4.5,0 v -8.1 a 2.25,2.25 0 0 1 2.25,-2.25 Z" />
+    <!-- Accent dot: Terracotta #D97757 -->
+    <path
+        android:fillColor="#D97757"
+        android:pathData="M 72.75,51 a 3,3 0 1 0 0,6 a 3,3 0 1 0 0,-6 Z" />
+</vector>

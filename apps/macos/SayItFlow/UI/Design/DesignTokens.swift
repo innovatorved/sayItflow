@@ -1,194 +1,145 @@
 import AppKit
 import SwiftUI
+#if canImport(AudioTapCore)
+@_exported import AudioTapCore
+#endif
 
-/// Ved Gupta Design System: Monochromatic Precision
-/// Extracted from /Users/vedgupta/Desktop/design-system (tokens.json, COLOR_SYSTEM.md, AGENT.md, DESIGN_SYSTEM.md)
-enum DesignTokens {
-    // MARK: - Monochrome Palette
+/// MonitorYT-Inspired Warm Lo-Fi Editorial Design System
+public enum DesignTokens {
+    // MARK: - MonitorYT Warm Lo-Fi Palette
 
-    static let black = Color(hex: 0x000000)
-    static let white = Color(hex: 0xffffff)
+    public static let warmCanvas       = Color(hex: 0xFAF9F6) // Warm alabaster (#FAF9F6)
+    public static let warmSurface      = Color(hex: 0xF3F1EC) // Soft stone (#F3F1EC)
+    public static let warmBorder       = Color(hex: 0xE4E1DA) // Crisp 1px sand border (#E4E1DA)
+    public static let warmInkPrimary   = Color(hex: 0x141413) // Deep charcoal ink (#141413)
+    public static let warmInkSecondary = Color(hex: 0x5A5044) // Warm muted brown (#5A5044)
+    public static let warmInkMuted     = Color(hex: 0x8A7E6E) // Subtle stone (#8A7E6E)
+    public static let warmReady        = Color(hex: 0x15803D) // Forest green status (#15803D)
+    public static let warmRecording    = Color(hex: 0xD97757) // Terracotta recording accent (#D97757)
 
-    static let neutral50  = Color(hex: 0xfafafa)
-    static let neutral100 = Color(hex: 0xf5f5f5)
-    static let neutral200 = Color(hex: 0xe5e5e5)
-    static let neutral300 = Color(hex: 0xd4d4d4)
-    static let neutral400 = Color(hex: 0xa3a3a3)
-    static let neutral500 = Color(hex: 0x737373)
-    static let neutral600 = Color(hex: 0x525252)
-    static let neutral700 = Color(hex: 0x404040)
-    static let neutral800 = Color(hex: 0x262626)
-    static let neutral900 = Color(hex: 0x171717)
-    static let neutral950 = Color(hex: 0x0a0a0a)
+    // MARK: - Surfaces & Canvas (Canonical MonitorYT Tokens)
 
-    // MARK: - Surfaces & Canvas (Adaptive Light/Dark)
+    /// Root page/window canvas. Warm alabaster #FAF9F6.
+    public static var canvas: Color { warmCanvas }
 
-    /// Root page/window canvas. Pure OLED black in dark mode, pure white in light mode.
-    static var canvas: Color {
-        Color(nsColor: NSColor(name: nil) { appearance in
-            appearance.isDark ? NSColor(hex: 0x000000) : NSColor(hex: 0xffffff)
-        })
-    }
+    /// Primary card/modal surface. Soft stone #F3F1EC.
+    public static var surface: Color { warmSurface }
 
-    /// Primary card/modal surface. #0a0a0a in dark, white in light.
-    static var surface: Color {
-        Color(nsColor: NSColor(name: nil) { appearance in
-            appearance.isDark ? NSColor(hex: 0x0a0a0a) : NSColor(hex: 0xffffff)
-        })
-    }
+    /// Secondary surface (sub-cards, icon boxes, table headers).
+    public static var surfaceSecondary: Color { warmSurface }
 
-    /// Secondary surface (sub-cards, icon boxes, table headers). #171717 dark, #f5f5f5 light.
-    static var surfaceSecondary: Color {
-        Color(nsColor: NSColor(name: nil) { appearance in
-            appearance.isDark ? NSColor(hex: 0x171717) : NSColor(hex: 0xf5f5f5)
-        })
-    }
+    /// Subtle fill (row hovers, text editor background).
+    public static var surfaceSubtle: Color { Color(hex: 0xF8F7F4) }
 
-    /// Subtle fill (row hovers, marketing asides). #171717 dark, #fafafa light.
-    static var surfaceSubtle: Color {
-        Color(nsColor: NSColor(name: nil) { appearance in
-            appearance.isDark ? NSColor(hex: 0x171717) : NSColor(hex: 0xfafafa)
-        })
-    }
+    /// Crisp sand border #E4E1DA.
+    public static var border: Color { warmBorder }
 
-    /// Primary crisp 1px border. #262626 dark, #e5e5e5 light.
-    static var borderPrimary: Color {
-        Color(nsColor: NSColor(name: nil) { appearance in
-            appearance.isDark ? NSColor(hex: 0x262626) : NSColor(hex: 0xe5e5e5)
-        })
-    }
+    /// Backward-compatibility alias for border.
+    public static var borderPrimary: Color { warmBorder }
 
-    /// Subtle divider border. #1f1f1f dark, #f0f0f0 light.
-    static var borderSubtle: Color {
-        Color(nsColor: NSColor(name: nil) { appearance in
-            appearance.isDark ? NSColor(hex: 0x1f1f1f) : NSColor(hex: 0xf0f0f0)
-        })
-    }
+    /// Backward-compatibility alias for subtle divider border.
+    public static var borderSubtle: Color { warmBorder }
 
-    /// Hover border. #525252 dark, #a1a1a1 light.
-    static var borderHover: Color {
-        Color(nsColor: NSColor(name: nil) { appearance in
-            appearance.isDark ? NSColor(hex: 0x525252) : NSColor(hex: 0xa1a1a1)
-        })
-    }
+    /// Hover border.
+    public static var borderHover: Color { Color(hex: 0xD8D4CB) }
 
-    // MARK: - Typography Contrast Hierarchy
+    // MARK: - Typography Contrast Hierarchy (Canonical MonitorYT Tokens)
 
-    /// Primary text. Pure white in dark, #0a0a0a in light.
-    static var textPrimary: Color {
-        Color(nsColor: NSColor(name: nil) { appearance in
-            appearance.isDark ? NSColor(hex: 0xffffff) : NSColor(hex: 0x0a0a0a)
-        })
-    }
+    /// Primary deep charcoal ink #141413.
+    public static var inkPrimary: Color { warmInkPrimary }
 
-    /// Secondary text (captions, descriptions). #a3a3a3 dark, #525252 light.
-    static var textSecondary: Color {
-        Color(nsColor: NSColor(name: nil) { appearance in
-            appearance.isDark ? NSColor(hex: 0xa3a3a3) : NSColor(hex: 0x525252)
-        })
-    }
+    /// Backward-compatibility alias for textPrimary.
+    public static var textPrimary: Color { warmInkPrimary }
 
-    /// Muted text (micro-eyebrows, uppercase tags). #737373.
-    static var textMuted: Color {
-        neutral500
-    }
+    /// Warm muted brown ink #5A5044.
+    public static var inkSecondary: Color { warmInkSecondary }
 
-    /// Ved Gupta signature selection blue.
-    static let selection = Color(hex: 0x47a3f3)
-    static let selectionForeground = Color(hex: 0xfefefe)
+    /// Backward-compatibility alias for textSecondary.
+    public static var textSecondary: Color { warmInkSecondary }
+
+    /// Subtle stone muted ink #8A7E6E.
+    public static var inkMuted: Color { warmInkMuted }
+
+    /// Backward-compatibility alias for textMuted.
+    public static var textMuted: Color { warmInkMuted }
+
+    /// Forest green active/ready status #15803D.
+    public static var ready: Color { warmReady }
+
+    /// Terracotta recording accent #D97757.
+    public static var recording: Color { warmRecording }
+
+    /// Signature selection accent.
+    public static var selection: Color { warmRecording }
+    public static var selectionForeground: Color { warmCanvas }
 
     // MARK: - Semantic Soft Tints (Badges & State)
 
-    // Success (Green)
-    static var successFg: Color {
-        Color(nsColor: NSColor(name: nil) { $0.isDark ? NSColor(hex: 0x4ade80) : NSColor(hex: 0x15803d) })
-    }
-    static var successBg: Color {
-        Color(nsColor: NSColor(name: nil) { $0.isDark ? NSColor(red: 5/255, green: 46/255, blue: 22/255, alpha: 0.3) : NSColor(hex: 0xf0fdf4) })
-    }
-    static var successBorder: Color {
-        Color(nsColor: NSColor(name: nil) { $0.isDark ? NSColor(hex: 0x14532d) : NSColor(hex: 0xbbf7d0) })
-    }
+    // Success / Ready (Green)
+    public static var successFg: Color { warmReady }
+    public static var successBg: Color { Color(hex: 0xEEF7F1) }
+    public static var successBorder: Color { Color(hex: 0xC6E7D1) }
 
-    // Warning (Amber)
-    static var warningFg: Color {
-        Color(nsColor: NSColor(name: nil) { $0.isDark ? NSColor(hex: 0xfbbf24) : NSColor(hex: 0xb45309) })
-    }
-    static var warningBg: Color {
-        Color(nsColor: NSColor(name: nil) { $0.isDark ? NSColor(red: 69/255, green: 26/255, blue: 3/255, alpha: 0.3) : NSColor(hex: 0xfffbeb) })
-    }
-    static var warningBorder: Color {
-        Color(nsColor: NSColor(name: nil) { $0.isDark ? NSColor(hex: 0x78350f) : NSColor(hex: 0xfde68a) })
-    }
+    // Warning (Amber / Gold)
+    public static var warningFg: Color { Color(hex: 0xB45309) }
+    public static var warningBg: Color { Color(hex: 0xFDF6E7) }
+    public static var warningBorder: Color { Color(hex: 0xF7E2B0) }
 
     // Danger (Red)
-    static var dangerFg: Color {
-        Color(nsColor: NSColor(name: nil) { $0.isDark ? NSColor(hex: 0xf87171) : NSColor(hex: 0xb91c1c) })
-    }
-    static var dangerBg: Color {
-        Color(nsColor: NSColor(name: nil) { $0.isDark ? NSColor(red: 69/255, green: 10/255, blue: 10/255, alpha: 0.3) : NSColor(hex: 0xfef2f2) })
-    }
-    static var dangerBorder: Color {
-        Color(nsColor: NSColor(name: nil) { $0.isDark ? NSColor(hex: 0x7f1d1d) : NSColor(hex: 0xfecaca) })
-    }
-    static let dangerSolid = Color(hex: 0xdc2626)
+    public static var dangerFg: Color { Color(hex: 0xB91C1C) }
+    public static var dangerBg: Color { Color(hex: 0xFDF1F1) }
+    public static var dangerBorder: Color { Color(hex: 0xF7CACA) }
+    public static let dangerSolid = Color(hex: 0xDC2626)
 
-    // Info (Blue)
-    static var infoFg: Color {
-        Color(nsColor: NSColor(name: nil) { $0.isDark ? NSColor(hex: 0x60a5fa) : NSColor(hex: 0x1d4ed8) })
-    }
-    static var infoBg: Color {
-        Color(nsColor: NSColor(name: nil) { $0.isDark ? NSColor(red: 23/255, green: 37/255, blue: 84/255, alpha: 0.3) : NSColor(hex: 0xeff6ff) })
-    }
-    static var infoBorder: Color {
-        Color(nsColor: NSColor(name: nil) { $0.isDark ? NSColor(hex: 0x1e3a8a) : NSColor(hex: 0xbfdbfe) })
-    }
+    // Info (Terracotta Accent)
+    public static var infoFg: Color { warmRecording }
+    public static var infoBg: Color { Color(hex: 0xFAF0EC) }
+    public static var infoBorder: Color { Color(hex: 0xF2D4C9) }
 
     // MARK: - Radii
 
-    static let radiusSm: CGFloat = 4
-    static let radiusMd: CGFloat = 6
-    static let radiusLg: CGFloat = 8
-    static let radiusXl: CGFloat = 12
-    static let radiusFull: CGFloat = 9999
+    public static let radiusSm: CGFloat = 4
+    public static let radiusMd: CGFloat = 6
+    public static let radiusLg: CGFloat = 8
+    public static let radiusXl: CGFloat = 12
+    public static let radiusFull: CGFloat = 9999
 
-
-    static let displayFontSize: CGFloat = 24
-    static let baseFontSize: CGFloat = 13
-    static let sectionLabelSize: CGFloat = 11
-    static var statValueFont: Font { .system(size: 20, weight: .semibold, design: .monospaced) }
+    public static let displayFontSize: CGFloat = 24
+    public static let baseFontSize: CGFloat = 13
+    public static let sectionLabelSize: CGFloat = 11
+    public static var statValueFont: Font { .system(size: 20, weight: .semibold, design: .monospaced) }
 
     // Typography tokens
-    static let trackingTighter: CGFloat = -0.6
-    static let trackingTight: CGFloat = -0.3
-    static let trackingNormal: CGFloat = 0
-    static let trackingLoose: CGFloat = 0.8
+    public static let trackingTighter: CGFloat = -0.6
+    public static let trackingTight: CGFloat = -0.3
+    public static let trackingNormal: CGFloat = 0
+    public static let trackingLoose: CGFloat = 0.8
 
-    static func fontDisplay(size: CGFloat, weight: Font.Weight = .semibold) -> Font {
+    public static func fontDisplay(size: CGFloat, weight: Font.Weight = .semibold) -> Font {
         .system(size: size, weight: weight)
     }
 
-    static func fontMono(size: CGFloat, weight: Font.Weight = .regular) -> Font {
+    public static func fontMono(size: CGFloat, weight: Font.Weight = .regular) -> Font {
         .system(size: size, weight: weight, design: .monospaced)
     }
 
-    static let spaceXs: CGFloat = 4
-    static let spaceSm: CGFloat = 8
-    static let spaceMd: CGFloat = 12
-    static let spaceLg: CGFloat = 16
-    static let spaceXl: CGFloat = 24
+    public static let spaceXs: CGFloat = 4
+    public static let spaceSm: CGFloat = 8
+    public static let spaceMd: CGFloat = 12
+    public static let spaceLg: CGFloat = 16
+    public static let spaceXl: CGFloat = 24
 
     // MARK: - Motion
 
-    static var reduceMotion: Bool {
+    public static var reduceMotion: Bool {
         NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
     }
 
-    static var easeOut: Animation {
+    public static var easeOut: Animation {
         reduceMotion ? .linear(duration: 0.01) : .easeOut(duration: 0.15)
     }
 
-    static var pulse: Animation {
+    public static var pulse: Animation {
         reduceMotion ? .linear(duration: 0.01) : .easeInOut(duration: 0.9).repeatForever(autoreverses: true)
     }
 }
@@ -227,16 +178,14 @@ extension NSAppearance {
 
 // MARK: - Button Styles
 
-/// Inverted monochrome primary button: black on white in dark mode, white on black in light mode.
+/// Warm lo-fi MonitorYT primary button: deep charcoal #141413 on warm alabaster #FAF9F6.
 struct MonochromePrimaryButtonStyle: ButtonStyle {
-    @Environment(\.colorScheme) private var colorScheme
     var isCompact: Bool = false
 
     func makeBody(configuration: Configuration) -> some View {
-        let isDark = colorScheme == .dark
-        let bg = isDark ? Color.white : Color.black
-        let fg = isDark ? Color.black : Color.white
-        let pressedOpacity = configuration.isPressed ? 0.8 : 1.0
+        let bg = DesignTokens.inkPrimary
+        let fg = DesignTokens.canvas
+        let pressedOpacity = configuration.isPressed ? 0.85 : 1.0
 
         configuration.label
             .font(.system(size: isCompact ? 12 : 13, weight: .medium))
@@ -250,16 +199,15 @@ struct MonochromePrimaryButtonStyle: ButtonStyle {
     }
 }
 
-/// 1px crisp outline button.
+/// 1px crisp outline button with warm surface and sand border.
 struct MonochromeOutlineButtonStyle: ButtonStyle {
-    @Environment(\.colorScheme) private var colorScheme
     var isCompact: Bool = false
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: isCompact ? 12 : 13, weight: .medium))
             .tracking(-0.02)
-            .foregroundStyle(DesignTokens.textPrimary)
+            .foregroundStyle(DesignTokens.inkPrimary)
             .padding(.horizontal, isCompact ? 12 : 16)
             .frame(height: isCompact ? 28 : 34)
             .background(
@@ -268,14 +216,14 @@ struct MonochromeOutlineButtonStyle: ButtonStyle {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: DesignTokens.radiusMd)
-                    .stroke(DesignTokens.borderPrimary, lineWidth: 1)
+                    .stroke(DesignTokens.border, lineWidth: 1)
             )
             .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
             .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
     }
 }
 
-/// Ghost button (no border, hover fill).
+/// Ghost button (no border, warm hover fill).
 struct MonochromeGhostButtonStyle: ButtonStyle {
     var isCompact: Bool = false
 
@@ -283,11 +231,11 @@ struct MonochromeGhostButtonStyle: ButtonStyle {
         configuration.label
             .font(.system(size: isCompact ? 12 : 13, weight: .medium))
             .tracking(-0.02)
-            .foregroundStyle(DesignTokens.textSecondary)
+            .foregroundStyle(DesignTokens.inkSecondary)
             .padding(.horizontal, isCompact ? 8 : 12)
             .frame(height: isCompact ? 28 : 34)
             .background(
-                configuration.isPressed ? DesignTokens.surfaceSecondary : Color.clear,
+                configuration.isPressed ? DesignTokens.surface : Color.clear,
                 in: RoundedRectangle(cornerRadius: DesignTokens.radiusMd)
             )
     }
@@ -355,3 +303,128 @@ extension View {
         formStyle(.grouped)
     }
 }
+
+#if !SWIFT_PACKAGE
+import Foundation
+import Combine
+
+/// Represents an individual voice dictation event stored in history.
+public struct DictationRecord: Identifiable, Codable, Equatable {
+    public let id: UUID
+    public let timestamp: Date
+    public let text: String
+    public let wordCount: Int
+    public let charCount: Int
+    public let appName: String
+    public let durationSeconds: Double
+
+    public init(
+        id: UUID = UUID(),
+        timestamp: Date = Date(),
+        text: String,
+        wordCount: Int? = nil,
+        charCount: Int? = nil,
+        appName: String = "",
+        durationSeconds: Double = 0.0
+    ) {
+        self.id = id
+        self.timestamp = timestamp
+        self.text = text
+        self.wordCount = wordCount ?? text.split { $0.isWhitespace || $0.isNewline }.count
+        self.charCount = charCount ?? text.count
+        self.appName = appName
+        self.durationSeconds = durationSeconds
+    }
+}
+
+/// On-device storage for past voice dictation sessions.
+/// Persists records locally to UserDefaults with JSON encoding.
+@MainActor
+public final class DictationHistoryStore: ObservableObject {
+    public static let shared = DictationHistoryStore()
+
+    private static let storageKey = "SayItFlow.DictationHistory"
+    private static let maxRecords = 500
+
+    @Published public private(set) var records: [DictationRecord] = []
+
+    public init() {
+        load()
+    }
+
+    /// Records a new dictation transcript and saves to persistent storage.
+    @discardableResult
+    public func record(text: String, appName: String = "", durationSeconds: Double = 0.0) -> DictationRecord? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        let item = DictationRecord(
+            text: trimmed,
+            appName: appName,
+            durationSeconds: durationSeconds
+        )
+
+        records.insert(item, at: 0)
+        if records.count > Self.maxRecords {
+            records = Array(records.prefix(Self.maxRecords))
+        }
+
+        save()
+        return item
+    }
+
+    /// Deletes a specific record by its unique ID.
+    public func delete(id: UUID) {
+        records.removeAll { $0.id == id }
+        save()
+    }
+
+    /// Deletes records at specified index offsets.
+    public func delete(at offsets: IndexSet) {
+        records.remove(atOffsets: offsets)
+        save()
+    }
+
+    /// Clears all recorded dictations.
+    public func clearAll() {
+        records.removeAll()
+        save()
+    }
+
+    /// Searches records matching query in transcript or app name.
+    public func search(query: String) -> [DictationRecord] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return records }
+
+        return records.filter { record in
+            record.text.localizedCaseInsensitiveContains(trimmed) ||
+            record.appName.localizedCaseInsensitiveContains(trimmed)
+        }
+    }
+
+    private func load() {
+        guard let data = UserDefaults.standard.data(forKey: Self.storageKey) else {
+            return
+        }
+        do {
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            records = try decoder.decode([DictationRecord].self, from: data)
+        } catch {
+            records = []
+        }
+    }
+
+    private func save() {
+        do {
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            let data = try encoder.encode(records)
+            UserDefaults.standard.set(data, forKey: Self.storageKey)
+        } catch {
+            // Ignore persistence write failure
+        }
+    }
+}
+#endif
+

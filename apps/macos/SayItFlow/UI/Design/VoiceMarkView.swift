@@ -1,26 +1,80 @@
 import AppKit
 import SwiftUI
 
-/// Official Ved Gupta Geometric V Logo
+/// Unified minimal monochrome waveform brand mark: 4 rounded vertical bars + terracotta accent dot
+public struct WaveformBrandMark: View {
+    public var size: CGFloat = 20
+    public var tint: Color = Color(red: 20/255, green: 20/255, blue: 19/255) // #141413 deep charcoal
+    public var accentColor: Color = Color(red: 217/255, green: 119/255, blue: 87/255) // #D97757 terracotta
+    public var showAccentDot: Bool = true
+
+    // Relative bar heights: [0.45, 1.0, 0.70, 0.35]
+    private let relHeights: [CGFloat] = [0.45, 1.0, 0.70, 0.35]
+
+    public init(
+        size: CGFloat = 20,
+        tint: Color = Color(red: 20/255, green: 20/255, blue: 19/255),
+        accentColor: Color = Color(red: 217/255, green: 119/255, blue: 87/255),
+        showAccentDot: Bool = true
+    ) {
+        self.size = size
+        self.tint = tint
+        self.accentColor = accentColor
+        self.showAccentDot = showAccentDot
+    }
+
+    public var body: some View {
+        let barWidth = max(1.5, size * 0.125)
+        let barSpacing = max(1.2, size * 0.11)
+        let dotDiameter = max(2.0, size * 0.16)
+        let dotGap = max(1.5, size * 0.13)
+        let maxBarHeight = size * 0.85
+
+        HStack(alignment: .center, spacing: barSpacing) {
+            ForEach(0..<relHeights.count, id: \.self) { i in
+                RoundedRectangle(cornerRadius: barWidth / 2.0)
+                    .fill(tint)
+                    .frame(width: barWidth, height: max(2, maxBarHeight * relHeights[i]))
+            }
+
+            if showAccentDot {
+                Circle()
+                    .fill(accentColor)
+                    .frame(width: dotDiameter, height: dotDiameter)
+                    .padding(.leading, dotGap - barSpacing)
+            }
+        }
+        .frame(width: size, height: size)
+    }
+}
+
+/// Backward-compatible waveform shape representing the 4-bar mark
 struct VLogoShape: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
-        let w = rect.width
-        let h = rect.height
+        let relHeights: [CGFloat] = [0.45, 1.0, 0.70, 0.35]
+        let barWidth = rect.height * 0.125
+        let barSpacing = rect.height * 0.11
+        let dotGap = rect.height * 0.13
+        let dotDiameter = rect.height * 0.16
+        let totalWidth = (4 * barWidth) + (3 * barSpacing) + dotGap + dotDiameter
+        var curX = rect.midX - totalWidth / 2.0
 
-        // Precision geometric V glyph
-        path.move(to: CGPoint(x: w * 0.15, y: h * 0.2))
-        path.addLine(to: CGPoint(x: w * 0.5, y: h * 0.8))
-        path.addLine(to: CGPoint(x: w * 0.85, y: h * 0.2))
-        path.addLine(to: CGPoint(x: w * 0.70, y: h * 0.2))
-        path.addLine(to: CGPoint(x: w * 0.5, y: h * 0.58))
-        path.addLine(to: CGPoint(x: w * 0.30, y: h * 0.2))
-        path.closeSubpath()
+        for rh in relHeights {
+            let bh = rect.height * rh * 0.85
+            let barRect = CGRect(x: curX, y: rect.midY - bh / 2.0, width: barWidth, height: bh)
+            path.addRoundedRect(in: barRect, cornerSize: CGSize(width: barWidth / 2, height: barWidth / 2))
+            curX += barWidth + barSpacing
+        }
+
+        curX += dotGap - barSpacing
+        let dotRect = CGRect(x: curX, y: rect.midY - dotDiameter / 2.0, width: dotDiameter, height: dotDiameter)
+        path.addEllipse(in: dotRect)
         return path
     }
 }
 
-/// Standalone icon mark inside a rounded 1px border box as defined in Ved Gupta design system
+/// Standalone icon mark inside a rounded 1px border box as defined in design system
 struct LogoMark: View {
     enum Size {
         case sm, md, lg
@@ -56,9 +110,11 @@ struct LogoMark: View {
             RoundedRectangle(cornerRadius: size.cornerRadius)
                 .stroke(DesignTokens.borderPrimary, lineWidth: 1)
 
-            VLogoShape()
-                .fill(tint)
-                .frame(width: size.iconSize, height: size.iconSize)
+            WaveformBrandMark(
+                size: size.iconSize,
+                tint: tint,
+                accentColor: Color(red: 217/255, green: 119/255, blue: 87/255)
+            )
         }
         .frame(width: size.boxSize, height: size.boxSize)
     }
@@ -94,19 +150,28 @@ struct BrandLockup: View {
 struct VoiceMarkShape: View {
     var compact: Bool = false
     var color: Color = DesignTokens.textPrimary
+    var accentColor: Color = Color(red: 217/255, green: 119/255, blue: 87/255)
 
-    private var barWidths: [CGFloat] { compact ? [3, 3, 3, 3, 3] : [3, 3, 3, 3, 3] }
-    private var barHeights: [CGFloat] { compact ? [5, 8, 12, 8, 5] : [6, 10, 14, 10, 6] }
+    private var relHeights: [CGFloat] { [0.45, 1.0, 0.70, 0.35] }
+    private var maxBarHeight: CGFloat { compact ? 12 : 14 }
+    private var barWidth: CGFloat { compact ? 2.5 : 3.0 }
     private var barSpacing: CGFloat { compact ? 1.5 : 2.0 }
+    private var dotDiameter: CGFloat { compact ? 2.5 : 3.0 }
+    private var dotGap: CGFloat { compact ? 2.0 : 2.5 }
     private var cornerRadius: CGFloat { 1.5 }
 
     var body: some View {
         HStack(alignment: .center, spacing: barSpacing) {
-            ForEach(0 ..< barHeights.count, id: \.self) { index in
+            ForEach(0 ..< relHeights.count, id: \.self) { index in
                 RoundedRectangle(cornerRadius: cornerRadius)
                     .fill(color)
-                    .frame(width: barWidths[index], height: barHeights[index])
+                    .frame(width: barWidth, height: maxBarHeight * relHeights[index])
             }
+
+            Circle()
+                .fill(accentColor)
+                .frame(width: dotDiameter, height: dotDiameter)
+                .padding(.leading, dotGap - barSpacing)
         }
     }
 }
@@ -116,18 +181,20 @@ struct VoiceMarkView: View {
     var tint: Color = DesignTokens.textPrimary
 
     var body: some View {
-        VoiceMarkShape(compact: size <= 18, color: tint)
-            .frame(width: size, height: size)
+        WaveformBrandMark(size: size, tint: tint)
     }
 }
 
 /// AppKit template bitmap for MenuBarExtra
 enum MenuBarIconRenderer {
     private static let pointSize = NSSize(width: 18, height: 18)
-    private static let barWidths: [CGFloat] = [3, 3, 3, 3, 3]
-    private static let barHeights: [CGFloat] = [5, 8, 12, 8, 5]
-    private static let barSpacing: CGFloat = 1.25
-    private static let cornerRadius: CGFloat = 1.5
+    private static let relHeights: [CGFloat] = [0.45, 1.0, 0.70, 0.35]
+    private static let maxHeight: CGFloat = 11.0
+    private static let barWidth: CGFloat = 2.0
+    private static let barSpacing: CGFloat = 1.4
+    private static let dotDiameter: CGFloat = 2.2
+    private static let dotGap: CGFloat = 1.8
+    private static let cornerRadius: CGFloat = 1.0
 
     @MainActor
     static func icon(for appState: AppState) -> NSImage {
@@ -141,15 +208,23 @@ enum MenuBarIconRenderer {
             NSColor.clear.setFill()
             rect.fill()
             NSColor.black.setFill()
-            let totalWidth = barWidths.reduce(0, +) + barSpacing * CGFloat(barWidths.count - 1)
-            var x = (rect.width - totalWidth) / 2
-            for index in barWidths.indices {
-                let height = barHeights[index]
-                let y = (rect.height - height) / 2
-                let bar = NSRect(x: x, y: y, width: barWidths[index], height: height)
+
+            let totalWidth = (4.0 * barWidth) + (3.0 * barSpacing) + dotGap + dotDiameter
+            var x = (rect.width - totalWidth) / 2.0
+
+            for rh in relHeights {
+                let height = maxHeight * rh
+                let y = (rect.height - height) / 2.0
+                let bar = NSRect(x: x, y: y, width: barWidth, height: height)
                 NSBezierPath(roundedRect: bar, xRadius: cornerRadius, yRadius: cornerRadius).fill()
-                x += barWidths[index] + barSpacing
+                x += barWidth + barSpacing
             }
+
+            x += dotGap - barSpacing
+            let dotY = (rect.height - dotDiameter) / 2.0
+            let dotRect = NSRect(x: x, y: dotY, width: dotDiameter, height: dotDiameter)
+            NSBezierPath(ovalIn: dotRect).fill()
+
             return true
         }
         image.isTemplate = true

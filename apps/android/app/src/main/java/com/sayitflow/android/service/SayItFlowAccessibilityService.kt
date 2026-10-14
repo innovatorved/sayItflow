@@ -15,19 +15,21 @@ import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.sayitflow.android.SayItFlowCoordinator
+import com.sayitflow.android.ml.HinglishNormalizer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * System-wide Accessibility Service for Google Pixel:
  * 1. Intercepts hardware Volume button holds (`Volume Down`, `Volume Up`, or `Volume Up + Down` chord)
- * 2. Keeps `desert-ant-labs/voz` warm in RAM on service connection and button press
- * 3. Captures 16 kHz mono PCM while held & displays the Ved Gupta Monochrome waveform pill
- * 4. Transcribes with `desert-ant-labs/voz` + polishes with instant `S1-mini` (App-Aware Context)
+ * 2. Keeps SenseVoice/Voz warm in RAM on service connection and button press
+ * 3. Captures 16 kHz mono PCM with zero-loss circular pre-roll & displays waveform pill
+ * 4. Transcribes with 100% on-device offline SenseVoice + Roman Hinglish normalizer + S1-mini
  * 5. Injects text directly into the active text input without switching away from Gboard!
  */
 class SayItFlowAccessibilityService : AccessibilityService() {
@@ -53,7 +55,9 @@ class SayItFlowAccessibilityService : AccessibilityService() {
         overlayPill = OverlayPillController(this)
         coordinator.setAccessibilityConnected(true)
 
-        if (coordinator.asrEngineMode.value == SayItFlowCoordinator.AsrEngineMode.VOZ_OFFLINE &&
+        if (coordinator.asrEngineMode.value == SayItFlowCoordinator.AsrEngineMode.SENSE_VOICE_OFFLINE) {
+            coordinator.senseVoiceEngine.warmUpAsync()
+        } else if (coordinator.asrEngineMode.value == SayItFlowCoordinator.AsrEngineMode.VOZ_OFFLINE &&
             coordinator.vozEngine.areModelFilesInstalled()
         ) {
             coordinator.vozEngine.warmUpAsync()
@@ -143,15 +147,21 @@ class SayItFlowAccessibilityService : AccessibilityService() {
             KeyEvent.ACTION_DOWN -> {
                 if (event.repeatCount == 0) {
                     holdTriggered = false
-                    if (coordinator.asrEngineMode.value == SayItFlowCoordinator.AsrEngineMode.INSTANT_STREAMING &&
+                    val asrMode = coordinator.asrEngineMode.value
+                    if (asrMode == SayItFlowCoordinator.AsrEngineMode.SENSE_VOICE_OFFLINE) {
+                        // Start 1.5s circular pre-roll on key down without dropping initial speech
+                        coordinator.audioCapture.startPreRoll()
+                        coordinator.senseVoiceEngine.warmUpAsync()
+                    } else if (asrMode == SayItFlowCoordinator.AsrEngineMode.INSTANT_STREAMING &&
                         coordinator.fastStreamingEngine.isAvailable()
                     ) {
                         // Start pre-roll microphone capture at millisecond 0 so speech during the hold delay is never cut off
                         coordinator.fastStreamingEngine.startPreRollOnKeyDown()
-                    } else if (coordinator.asrEngineMode.value == SayItFlowCoordinator.AsrEngineMode.VOZ_OFFLINE &&
-                        coordinator.vozEngine.areModelFilesInstalled()
-                    ) {
-                        coordinator.vozEngine.warmUpAsync()
+                    } else if (asrMode == SayItFlowCoordinator.AsrEngineMode.VOZ_OFFLINE) {
+                        coordinator.audioCapture.startPreRoll()
+                        if (coordinator.vozEngine.areModelFilesInstalled()) {
+                            coordinator.vozEngine.warmUpAsync()
+                        }
                     }
                     val runnable = Runnable {
                         holdTriggered = true
@@ -170,6 +180,7 @@ class SayItFlowAccessibilityService : AccessibilityService() {
                     finishDictationSession()
                 } else {
                     // Short tap (< threshold): discard pre-roll and forward normal volume adjustment
+                    coordinator.audioCapture.discardPreRoll()
                     coordinator.fastStreamingEngine.discardPreRoll()
                     val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
                     audioManager.adjustStreamVolume(
@@ -191,7 +202,10 @@ class SayItFlowAccessibilityService : AccessibilityService() {
                 if (event.keyCode == KeyEvent.KEYCODE_VOLUME_UP) volUpPressed = true
                 if (volDownPressed && volUpPressed && !holdTriggered) {
                     holdTriggered = true
-                    if (coordinator.asrEngineMode.value == SayItFlowCoordinator.AsrEngineMode.VOZ_OFFLINE &&
+                    val asrMode = coordinator.asrEngineMode.value
+                    if (asrMode == SayItFlowCoordinator.AsrEngineMode.SENSE_VOICE_OFFLINE) {
+                        coordinator.senseVoiceEngine.warmUpAsync()
+                    } else if (asrMode == SayItFlowCoordinator.AsrEngineMode.VOZ_OFFLINE &&
                         coordinator.vozEngine.areModelFilesInstalled()
                     ) {
                         coordinator.vozEngine.warmUpAsync()
@@ -216,8 +230,9 @@ class SayItFlowAccessibilityService : AccessibilityService() {
     }
 
     private fun startDictationSession() {
+        val asrMode = coordinator.asrEngineMode.value
         val useStreaming =
-            coordinator.asrEngineMode.value == SayItFlowCoordinator.AsrEngineMode.INSTANT_STREAMING &&
+            asrMode == SayItFlowCoordinator.AsrEngineMode.INSTANT_STREAMING &&
                 coordinator.fastStreamingEngine.isAvailable()
 
         if (useStreaming) {
@@ -235,14 +250,16 @@ class SayItFlowAccessibilityService : AccessibilityService() {
         }
 
         activeSessionStreaming = false
-        if (!coordinator.vozEngine.areModelFilesInstalled()) {
+        if (asrMode == SayItFlowCoordinator.AsrEngineMode.VOZ_OFFLINE && !coordinator.vozEngine.areModelFilesInstalled()) {
             triggerHaptic(isStart = false)
             overlayPill.hide()
             return
         }
+
         // Attach overlay first so Android 14+ AudioFlinger sees an active Accessibility Overlay window
         overlayPill.showListening(currentForegroundPackage)
-        val started = coordinator.audioCapture.startRecording()
+        val promoted = coordinator.audioCapture.promoteToActiveRecording()
+        val started = if (promoted) true else coordinator.audioCapture.startRecording()
         if (started) {
             triggerHaptic(isStart = true)
         } else {
@@ -259,9 +276,10 @@ class SayItFlowAccessibilityService : AccessibilityService() {
             serviceScope.launch {
                 val t0 = System.currentTimeMillis()
                 try {
-                    val rawText = coordinator.fastStreamingEngine.stopAndAwaitTranscript(maxWaitMs = 1800L)
+                    val streamResult = coordinator.fastStreamingEngine.stopAndAwaitTranscript(maxWaitMs = 1800L)
                     overlayPill.hide()
 
+                    val rawText = HinglishNormalizer.transliterateToRomanHinglish(streamResult).trim()
                     if (rawText.isBlank()) {
                         return@launch
                     }
@@ -304,37 +322,56 @@ class SayItFlowAccessibilityService : AccessibilityService() {
             return
         }
 
-        if (!coordinator.audioCapture.isRecording.value) return
-        val samples = coordinator.audioCapture.stopRecording()
-        val rawMs = coordinator.audioCapture.lastRawDurationMs
+        if (!coordinator.audioCapture.isRecording.value) {
+            coordinator.audioCapture.discardPreRoll()
+            return
+        }
+
+        // Immediately trigger release haptic and show transcribing state on Main Looper
+        // Main Looper returns in <1ms without blocking on the 200ms post-release acoustic tail capture!
         triggerHaptic(isStart = false)
 
-        // Ignore ultra-short accidental releases (< 200 ms after hold threshold)
-        if (ignoreShortTap && rawMs < 200L) {
-            overlayPill.hide()
-            return
+        val asrMode = coordinator.asrEngineMode.value
+        val isCold = if (asrMode == SayItFlowCoordinator.AsrEngineMode.SENSE_VOICE_OFFLINE) {
+            !coordinator.senseVoiceEngine.isLoaded.value
+        } else {
+            !coordinator.vozEngine.isLoaded.value
         }
-        if (samples.size < 1600) {
-            overlayPill.hide()
-            return
-        }
-
-        val isCold = !coordinator.vozEngine.isLoaded.value
         overlayPill.showTranscribing(isColdWarmUp = isCold)
         val targetPkg = currentForegroundPackage
 
-        serviceScope.launch {
+        serviceScope.launch(Dispatchers.IO) {
             val t0 = System.currentTimeMillis()
             try {
-                val rawText = coordinator.vozEngine.transcribe(samples)
-                overlayPill.hide()
-                if (rawText.isBlank()) {
+                // Post-release acoustic tail is captured asynchronously on Dispatchers.IO
+                val samples = coordinator.audioCapture.stopRecordingAsync()
+                val rawMs = coordinator.audioCapture.lastRawDurationMs
+
+                // Ignore ultra-short accidental releases (< 200 ms after hold threshold)
+                if ((ignoreShortTap && rawMs < 200L) || samples.size < 1600) {
+                    withContext(Dispatchers.Main) {
+                        overlayPill.hide()
+                    }
                     return@launch
                 }
 
                 val selectedLang = coordinator.selectedLanguage.value
+                val rawTranscribed: String = if (asrMode == SayItFlowCoordinator.AsrEngineMode.SENSE_VOICE_OFFLINE) {
+                    coordinator.senseVoiceEngine.transcribe(samples, language = selectedLang).text
+                } else {
+                    coordinator.vozEngine.transcribe(samples)
+                }
+
+                val rawText = HinglishNormalizer.transliterateToRomanHinglish(rawTranscribed).trim()
+                if (rawText.isBlank()) {
+                    withContext(Dispatchers.Main) {
+                        overlayPill.hide()
+                    }
+                    return@launch
+                }
+
                 val shouldPolish = coordinator.s1MiniEnabled.value &&
-                    (selectedLang == "auto" || selectedLang == "en")
+                    (selectedLang == "auto" || selectedLang == "en" || selectedLang == "en-IN" || selectedLang == "hinglish")
 
                 val finalText = if (shouldPolish) {
                     coordinator.s1MiniEngine.polish(
@@ -348,7 +385,7 @@ class SayItFlowAccessibilityService : AccessibilityService() {
                     rawText
                 }
 
-                val elapsed = System.currentTimeMillis() - t0
+                val elapsed = (System.currentTimeMillis() - t0).coerceAtLeast(1L)
                 coordinator.recordDictation(
                     SayItFlowCoordinator.DictationRecord(
                         rawTranscript = rawText,
@@ -358,13 +395,18 @@ class SayItFlowAccessibilityService : AccessibilityService() {
                     )
                 )
 
-                val injected = injectTextIntoActiveField(finalText)
-                if (!injected) {
-                    copyToClipboard(finalText)
+                withContext(Dispatchers.Main) {
+                    overlayPill.hide()
+                    val injected = injectTextIntoActiveField(finalText)
+                    if (!injected) {
+                        copyToClipboard(finalText)
+                    }
                 }
             } catch (e: Exception) {
                 android.util.Log.e("SayItFlowService", "Dictation failed", e)
-                overlayPill.hide()
+                withContext(Dispatchers.Main) {
+                    overlayPill.hide()
+                }
             }
         }
     }
@@ -375,6 +417,7 @@ class SayItFlowAccessibilityService : AccessibilityService() {
         holdTriggered = false
         activeSessionStreaming = false
         if (::coordinator.isInitialized) {
+            coordinator.audioCapture.discardPreRoll()
             if (coordinator.audioCapture.isRecording.value) {
                 coordinator.audioCapture.stopRecording()
             }

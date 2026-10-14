@@ -6,6 +6,7 @@ import com.sayitflow.android.audio.AudioCaptureManager
 import com.sayitflow.android.ml.FastStreamingAsrEngine
 import com.sayitflow.android.ml.ModelDownloadManager
 import com.sayitflow.android.ml.S1MiniEngine
+import com.sayitflow.android.ml.SenseVoiceAsrEngine
 import com.sayitflow.android.ml.VozEngine
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -18,17 +19,23 @@ import kotlinx.coroutines.flow.asStateFlow
 class SayItFlowCoordinator private constructor(context: Context) {
 
     enum class AsrEngineMode(val id: String, val title: String, val subtitle: String, val badge: String) {
+        SENSE_VOICE_OFFLINE(
+            "sense_voice_offline",
+            "SenseVoice On-Device (Recommended)",
+            "100% on-device offline non-autoregressive neural model — instant on CPU across all phones",
+            "OFFLINE"
+        ),
         INSTANT_STREAMING(
             "instant_streaming",
-            "Instant Tensor Stream (Recommended)",
-            "Streams speech live while holding button — responds in ~80–180 ms on release",
+            "Google SODA Streaming",
+            "Streams speech live via Android SpeechRecognizer (Pixel Tensor only)",
             "~120ms"
         ),
         VOZ_OFFLINE(
             "voz_offline",
             "Voz-0.6B Offline ONNX",
             "600M-param FastConformer-TDT (384 MB) — batch offline decoding (~3–4s)",
-            "OFFLINE"
+            "384MB"
         )
     }
 
@@ -140,6 +147,7 @@ class SayItFlowCoordinator private constructor(context: Context) {
         context.getSharedPreferences("sayitflow_prefs", Context.MODE_PRIVATE)
 
     val fastStreamingEngine = FastStreamingAsrEngine(context)
+    val senseVoiceEngine = SenseVoiceAsrEngine(context)
     val vozEngine = VozEngine(context)
     val s1MiniEngine = S1MiniEngine(context)
     val downloadManager = ModelDownloadManager(context)
@@ -147,12 +155,14 @@ class SayItFlowCoordinator private constructor(context: Context) {
 
     private val _asrEngineMode = MutableStateFlow(
         AsrEngineMode.entries.find {
-            it.id == prefs.getString("asr_engine_mode", AsrEngineMode.INSTANT_STREAMING.id)
-        } ?: AsrEngineMode.INSTANT_STREAMING
+            it.id == prefs.getString("asr_engine_mode", AsrEngineMode.SENSE_VOICE_OFFLINE.id)
+        } ?: AsrEngineMode.SENSE_VOICE_OFFLINE
     )
     val asrEngineMode: StateFlow<AsrEngineMode> = _asrEngineMode.asStateFlow()
 
     init {
+        senseVoiceEngine.vozEngineDelegate = vozEngine
+        senseVoiceEngine.warmUpAsync()
         if (_asrEngineMode.value == AsrEngineMode.VOZ_OFFLINE && vozEngine.areModelFilesInstalled()) {
             vozEngine.warmUpAsync()
         }
@@ -228,7 +238,9 @@ class SayItFlowCoordinator private constructor(context: Context) {
     fun setAsrEngineMode(mode: AsrEngineMode) {
         _asrEngineMode.value = mode
         prefs.edit().putString("asr_engine_mode", mode.id).apply()
-        if (mode == AsrEngineMode.VOZ_OFFLINE && vozEngine.areModelFilesInstalled()) {
+        if (mode == AsrEngineMode.SENSE_VOICE_OFFLINE) {
+            senseVoiceEngine.warmUpAsync()
+        } else if (mode == AsrEngineMode.VOZ_OFFLINE && vozEngine.areModelFilesInstalled()) {
             vozEngine.warmUpAsync()
         }
     }
