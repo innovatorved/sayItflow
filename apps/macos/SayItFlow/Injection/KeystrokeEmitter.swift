@@ -31,7 +31,7 @@ enum KeystrokeEmitter {
         return wordSelectDenylist.contains(bundle)
     }
 
-    static func isSimulated(_ event: NSEvent) -> Bool {
+    nonisolated static func isSimulated(_ event: NSEvent) -> Bool {
         event.cgEvent.map {
             InjectionSessionGuardLogic.isSimulatedKeystroke(
                 userData: $0.getIntegerValueField(.eventSourceUserData),

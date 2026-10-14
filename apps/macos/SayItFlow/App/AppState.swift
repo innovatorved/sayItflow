@@ -38,6 +38,7 @@ final class AppState: ObservableObject {
     let engineSettings = EngineSettings.shared
     private var coordinator: DictationCoordinator?
     private var hotkeyEngine: HotkeyEngine?
+    private var permissionMonitorTask: Task<Void, Never>?
 
     private init() {
         wordCount = UserDefaults.standard.integer(forKey: "wordCount")
@@ -59,7 +60,7 @@ final class AppState: ObservableObject {
                 Task { @MainActor in
                     AppLogger.hotkey.error("Event tap failed: \(message, privacy: .public)")
                     self?.lastError = .pipeline(message)
-                    self?.openOnboarding()
+                    self?.startPermissionMonitor()
                 }
             }
         )
@@ -69,9 +70,31 @@ final class AppState: ObservableObject {
             ensureHotkeyRunning()
         } else if !Permissions.allGranted() {
             lastError = .permissionsIncomplete
+            startPermissionMonitor()
         }
 
         checkVozModelStatus()
+    }
+
+    func startPermissionMonitor() {
+        permissionMonitorTask?.cancel()
+        permissionMonitorTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                guard let self, !Task.isCancelled else { break }
+                self.refreshPermissionStatuses()
+                if PermissionsLogic.allGranted(statuses: self.permissionStatuses) {
+                    if !self.isHotkeyRunning {
+                        self.ensureHotkeyRunning()
+                        try? await Task.sleep(for: .milliseconds(60))
+                    }
+                    if self.isHotkeyRunning {
+                        self.lastError = nil
+                        break
+                    }
+                }
+            }
+        }
     }
 
     func checkVozModelStatus() {
@@ -149,9 +172,22 @@ final class AppState: ObservableObject {
     }
 
     func refreshPermissionStatuses() {
-        permissionStatuses = Dictionary(
+        let updated = Dictionary(
             uniqueKeysWithValues: PermissionKind.allCases.map { ($0, Permissions.status(for: $0)) }
         )
+        if updated != permissionStatuses {
+            permissionStatuses = updated
+            let summary = PermissionKind.allCases
+                .map { "\($0.rawValue)=\(updated[$0]?.label ?? "nil")" }
+                .joined(separator: ", ")
+            let ax = AXIsProcessTrusted()
+            let im = CGPreflightListenEventAccess()
+            let tap = Permissions.probeHotkeyTap()
+            SessionTrace.log(
+                "Permission statuses: \(summary) (AX=\(ax), IM=\(im), tap=\(tap))",
+                category: "permissions"
+            )
+        }
     }
 
     func refreshPermissionsAndHotkey(allowDuringOnboarding: Bool = false) {
@@ -161,6 +197,7 @@ final class AppState: ObservableObject {
         guard Permissions.allGranted() else {
             stopHotkey()
             lastError = .permissionsIncomplete
+            startPermissionMonitor()
             return
         }
         if lastError == .permissionsIncomplete { lastError = nil }
@@ -170,23 +207,34 @@ final class AppState: ObservableObject {
             return
         }
 
+        if isHotkeyHealthy {
+            if case .pipeline = lastError { lastError = nil }
+            return
+        }
+
         hotkeyEngine?.stop()
         guard Permissions.probeHotkeyTap() else {
             lastError = .pipeline("Hotkey listener unavailable — grant Input Monitoring")
+            startPermissionMonitor()
             return
         }
+        if case .pipeline = lastError { lastError = nil }
         hotkeyEngine?.start()
     }
 
     func ensureHotkeyRunning() {
         guard Permissions.allGranted() else { return }
         if lastError == .permissionsIncomplete { lastError = nil }
-        if isHotkeyRunning { return }
+        if isHotkeyHealthy {
+            if case .pipeline = lastError { lastError = nil }
+            return
+        }
         hotkeyEngine?.stop()
         guard Permissions.probeHotkeyTap() else {
             lastError = .pipeline("Hotkey listener unavailable")
             return
         }
+        if case .pipeline = lastError { lastError = nil }
         hotkeyEngine?.start()
     }
 

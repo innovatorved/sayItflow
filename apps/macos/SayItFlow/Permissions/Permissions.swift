@@ -91,7 +91,7 @@ enum Permissions {
             }
             return .notDetermined
         case .inputMonitoring:
-            if CGPreflightListenEventAccess() {
+            if CGPreflightListenEventAccess() || (AXIsProcessTrusted() && probeHotkeyTap()) {
                 return .granted
             }
             if UserDefaults.standard.bool(forKey: "inputMonitoringPromptShown") {

@@ -18,15 +18,17 @@ final class HoldSpaceKeyLogicTests: XCTestCase {
         XCTAssertEqual(result, HoldSpaceKeyLogic.KeyUpResult(consume: true, endDictation: true))
     }
 
-    func testAutorepeatPassesThroughWhilePending() {
+    func testAutorepeatConsumedWhilePending() {
         var logic = HoldSpaceKeyLogic()
         _ = logic.keyDown(isRepeat: false, isDictating: false)
-        XCTAssertFalse(logic.keyDown(isRepeat: true, isDictating: false))
+        XCTAssertTrue(logic.keyDown(isRepeat: true, isDictating: false))
     }
 
-    func testAutorepeatPassesThroughWhenIdle() {
+    func testAutorepeatConsumedWhenIdleAndStartsHoldTimer() {
         var logic = HoldSpaceKeyLogic()
-        XCTAssertFalse(logic.keyDown(isRepeat: true, isDictating: false))
+        XCTAssertNil(logic.spaceDownAt)
+        XCTAssertTrue(logic.keyDown(isRepeat: true, isDictating: false))
+        XCTAssertNotNil(logic.spaceDownAt)
     }
 
     func testLongHoldWithoutTimerStillEndsDictation() {

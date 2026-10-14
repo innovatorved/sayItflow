@@ -83,6 +83,8 @@ struct DashboardView: View {
         .onAppear {
             if let initialSection {
                 selection = initialSection
+            } else if !Permissions.allGranted() {
+                selection = .permissions
             }
             if selection == .status {
                 configureTestInjection()
@@ -616,13 +618,14 @@ struct DashboardView: View {
     private func configureTestInjection() {
         appState.refreshPermissionsAndHotkey(allowDuringOnboarding: true)
         appState.setOnboardingLiveHandlers(
-            prefix: { demoText },
+            prefix: { demoText.trimmingCharacters(in: .whitespaces) },
             update: { demoText = $0 },
             onComplete: { text in
-                if demoText.isEmpty {
+                let trimmed = demoText.trimmingCharacters(in: .whitespaces)
+                if trimmed.isEmpty {
                     demoText = text
                 } else {
-                    demoText += " " + text
+                    demoText = trimmed + " " + text
                 }
                 hint = "Inserted!"
             }

@@ -14,13 +14,17 @@ struct HoldSpaceKeyLogic: Sendable {
     private(set) var holdActivated = false
 
     /// Returns whether the keyDown event should be consumed (swallowed).
-    /// First press and autorepeat pass through until hold activates.
+    /// First press passes through so quick taps have zero typing latency;
+    /// autorepeat is always consumed so holding Space never types repeated spaces.
     mutating func keyDown(isRepeat: Bool, isDictating: Bool) -> Bool {
         if holdActivated || isDictating {
             return true
         }
         if isRepeat {
-            return false
+            if spaceDownAt == nil {
+                spaceDownAt = CFAbsoluteTimeGetCurrent()
+            }
+            return true
         }
         spaceDownAt = CFAbsoluteTimeGetCurrent()
         return false

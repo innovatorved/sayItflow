@@ -116,10 +116,15 @@ final class DictationCoordinator {
         let targetIcon = frontApp?.icon ?? NSApp.applicationIconImage
 
         // In hold-space mode, the initial Space keyDown passed through before the 0.25s hold
-        // threshold elapsed. Remove that trailing space if a text field is focused.
-        if AppSettings.shared.hotkeyMode == .holdSpace,
-           AXFocusResolver.focusedTextElement(forPID: pinnedPID) != nil {
-            _ = KeystrokeEmitter.deleteSelection()
+        // threshold elapsed. Remove that trailing space in focused text fields or Electron editors.
+        if AppSettings.shared.hotkeyMode == .holdSpace {
+            let preferPaste = InjectionTargetPolicy.prefersPaste(
+                bundleID: frontApp?.bundleIdentifier,
+                pid: pinnedPID
+            )
+            if preferPaste || AXFocusResolver.focusedTextElement(forPID: pinnedPID) != nil {
+                _ = KeystrokeEmitter.deleteSelection()
+            }
         }
 
         if AppSettings.shared.soundFeedbackEnabled {

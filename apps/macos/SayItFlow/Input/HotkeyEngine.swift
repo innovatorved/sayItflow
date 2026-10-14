@@ -26,6 +26,7 @@ final class HotkeyEngine: @unchecked Sendable {
     private var localFlagsMonitor: Any?
     private var holdSpaceLogic = HoldSpaceKeyLogic()
     private var holdActivationWorkItem: DispatchWorkItem?
+    private let timerQueue = DispatchQueue(label: "SayItFlow.HoldSpaceTimer", qos: .userInteractive)
 
     private static let spaceKeyCode: Int64 = 49
 
@@ -191,6 +192,9 @@ final class HotkeyEngine: @unchecked Sendable {
     }
 
     private func handleLocalEvent(_ event: NSEvent) -> NSEvent? {
+        if tapIsHealthy || KeystrokeEmitter.isSimulated(event) {
+            return event
+        }
         stateLock.lock()
         let currentMode = mode
         stateLock.unlock()
@@ -359,18 +363,8 @@ final class HotkeyEngine: @unchecked Sendable {
             return Unmanaged.passUnretained(event)
         }
 
-        if type == .keyDown || type == .keyUp {
-            let isRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
-            if isRepeat {
-                let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
-                stateLock.lock()
-                let dictating = isKeyDown
-                let currentMode = mode
-                stateLock.unlock()
-                if currentMode == .holdSpace, keyCode == Self.spaceKeyCode, !dictating {
-                    return Unmanaged.passUnretained(event)
-                }
-            }
+        if event.getIntegerValueField(.eventSourceUserData) == KeystrokeEmitter.simulatedEventTag {
+            return Unmanaged.passUnretained(event)
         }
 
         stateLock.lock()
@@ -418,15 +412,30 @@ final class HotkeyEngine: @unchecked Sendable {
         }
     }
 
-    // MARK: - Hold Space threshold (passthrough until hold activates)
+    // MARK: - Hold Space threshold (passthrough first press, consume repeats, activate after 0.25s)
 
     private func handleHoldSpaceKeyDown(isRepeat: Bool) -> Bool {
         stateLock.lock()
+        let wasDown = holdSpaceLogic.spaceDownAt != nil
         let isDictating = isKeyDown || holdSpaceLogic.holdActivated
         let consume = holdSpaceLogic.keyDown(isRepeat: isRepeat, isDictating: isDictating)
-        let shouldSchedule = !isRepeat && holdSpaceLogic.spaceDownAt != nil && !isDictating
+        let shouldSchedule = !wasDown && holdSpaceLogic.spaceDownAt != nil && !isDictating
+        let shouldActivateNow: Bool
+        if let downAt = holdSpaceLogic.spaceDownAt,
+           !isDictating,
+           CFAbsoluteTimeGetCurrent() - downAt >= HoldSpaceKeyLogic.holdThresholdSeconds,
+           holdSpaceLogic.thresholdElapsed(isDictating: isKeyDown) {
+            isKeyDown = true
+            shouldActivateNow = true
+        } else {
+            shouldActivateNow = false
+        }
         stateLock.unlock()
-        if shouldSchedule {
+
+        if shouldActivateNow {
+            cancelSpaceHoldTimer()
+            handler(.pressStarted)
+        } else if shouldSchedule {
             scheduleSpaceHoldActivation()
         }
         return consume
@@ -444,42 +453,43 @@ final class HotkeyEngine: @unchecked Sendable {
     }
 
     private func scheduleSpaceHoldActivation() {
-        performOnMainAsync { [weak self] in
-            guard let self else { return }
-            self.holdActivationWorkItem?.cancel()
-            let item = DispatchWorkItem { [weak self] in
-                self?.activateSpaceHoldIfStillDown()
-            }
-            self.holdActivationWorkItem = item
-            DispatchQueue.main.asyncAfter(
-                deadline: .now() + HoldSpaceKeyLogic.holdThresholdSeconds,
-                execute: item
-            )
+        stateLock.lock()
+        holdActivationWorkItem?.cancel()
+        let item = DispatchWorkItem { [weak self] in
+            self?.activateSpaceHoldIfStillDown()
         }
+        holdActivationWorkItem = item
+        stateLock.unlock()
+
+        timerQueue.asyncAfter(
+            deadline: .now() + HoldSpaceKeyLogic.holdThresholdSeconds,
+            execute: item
+        )
     }
 
     private func activateSpaceHoldIfStillDown() {
         // Threshold flip and isKeyDown must happen under one lock or key-up races the tap thread.
         stateLock.lock()
-        defer { stateLock.unlock() }
-        guard holdSpaceLogic.thresholdElapsed(isDictating: isKeyDown), !isKeyDown else { return }
+        guard holdSpaceLogic.thresholdElapsed(isDictating: isKeyDown), !isKeyDown else {
+            stateLock.unlock()
+            return
+        }
         isKeyDown = true
+        stateLock.unlock()
         handler(.pressStarted)
     }
 
     private func cancelSpaceHoldTimer() {
-        performOnMainAsync { [weak self] in
-            self?.holdActivationWorkItem?.cancel()
-            self?.holdActivationWorkItem = nil
-        }
+        stateLock.lock()
+        holdActivationWorkItem?.cancel()
+        holdActivationWorkItem = nil
+        stateLock.unlock()
     }
 
     private func clearSpaceHoldState() {
-        if Thread.isMainThread {
-            holdActivationWorkItem?.cancel()
-            holdActivationWorkItem = nil
-        }
         stateLock.lock()
+        holdActivationWorkItem?.cancel()
+        holdActivationWorkItem = nil
         holdSpaceLogic.reset()
         stateLock.unlock()
     }
