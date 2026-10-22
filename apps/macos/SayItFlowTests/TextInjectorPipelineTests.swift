@@ -14,6 +14,10 @@ final class TextInjectorPipelineTests: XCTestCase {
     }
 
     func testAXFocusResolverExecutionSpeed() {
+        // Warm up one-time LaunchServices / HIServices daemon IPC connection on cold test process start
+        var warmupDiagnostics = AXFocusResolver.Diagnostics()
+        _ = AXFocusResolver.focusedTextElement(forPID: ProcessInfo.processInfo.processIdentifier, diagnostics: &warmupDiagnostics)
+
         // Must return near-instantly without recursive window tree crawling
         var diagnostics = AXFocusResolver.Diagnostics()
         let start = CFAbsoluteTimeGetCurrent()

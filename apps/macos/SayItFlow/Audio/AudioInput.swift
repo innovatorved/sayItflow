@@ -64,7 +64,9 @@ final class AudioInput: @unchecked Sendable {
     }
 
     internal var isCapturingForTesting: Bool {
-        operationQueue.sync { lock.withLock { $0.phase == .streaming } && engine.isRunning }
+        operationQueue.sync {
+            lock.withLock { $0.phase == .streaming } && (engine.isRunning || pendingGraceRecovery != nil)
+        }
     }
     #endif
     var onConfigurationChange: (@Sendable () -> Void)?
@@ -181,8 +183,12 @@ final class AudioInput: @unchecked Sendable {
         guard lock.withLock({ $0.tapInstalled }), !engine.isRunning else {
             return engine.isRunning
         }
-        // Format mismatch after route change — reinstall tap instead of lightweight restart.
-        if let installedTapFormat, engine.inputNode.outputFormat(forBus: 0) != installedTapFormat {
+        // Format mismatch after route change (including Bluetooth HFP switching inputFormat from 44.1kHz to 16kHz)
+        // — reinstall tap instead of lightweight restart.
+        let hwFormat = engine.inputNode.inputFormat(forBus: 0)
+        let outFormat = engine.inputNode.outputFormat(forBus: 0)
+        if let installedTapFormat,
+           outFormat != installedTapFormat || (isValidFormat(hwFormat) && hwFormat.sampleRate != installedTapFormat.sampleRate) {
             logPhase("skipping lightweight restart — input format no longer matches tap")
             return false
         }
@@ -227,8 +233,13 @@ final class AudioInput: @unchecked Sendable {
 
     private func pollInputFormatOnQueue(attempts: Int = 20) -> AVAudioFormat? {
         for attempt in 0..<attempts {
-            let format = engine.inputNode.outputFormat(forBus: 0)
-            if isValidFormat(format) { return format }
+            let hwFormat = engine.inputNode.inputFormat(forBus: 0)
+            let outFormat = engine.inputNode.outputFormat(forBus: 0)
+            if isValidFormat(hwFormat), isValidFormat(outFormat), hwFormat.sampleRate != outFormat.sampleRate {
+                return hwFormat
+            }
+            if isValidFormat(outFormat) { return outFormat }
+            if isValidFormat(hwFormat) { return hwFormat }
             if attempt + 1 < attempts { Thread.sleep(forTimeInterval: 0.05) }
         }
         return nil
@@ -275,8 +286,10 @@ final class AudioInput: @unchecked Sendable {
             SIFRemoveTapSafely(input, 0)
             if SIFInstallTapSafely(input, 0, 4096, format, { [weak self] buffer, _ in
                 self?.emit(buffer: buffer)
+            }) || SIFInstallTapSafely(input, 0, 4096, nil, { [weak self] buffer, _ in
+                self?.emit(buffer: buffer)
             }) {
-                installedTapFormat = format
+                installedTapFormat = input.inputFormat(forBus: 0)
                 lock.withLock { $0.tapInstalled = true }
                 logPhase("installTap once")
                 return

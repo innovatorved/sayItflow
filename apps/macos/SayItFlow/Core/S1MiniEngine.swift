@@ -537,7 +537,12 @@ public final class S1MiniEngine: ObservableObject {
         // Query warm local server (sub-150ms)
         if let output = await queryLocalServer(prompt: prompt, rawLength: rawText.count) {
             let cleaned = cleanModelOutput(output, input: rawText)
-            if !cleaned.isEmpty, PolishOutputGuard.shouldApplyPolishResult(raw: rawText, polished: cleaned) {
+            let guardStructure: PolishStructure = (structure == .lists) ? .lists : .prose
+            if !cleaned.isEmpty, PolishOutputGuard.shouldApplyPolishResult(
+                raw: rawText,
+                polished: cleaned,
+                structure: guardStructure
+            ) {
                 return cleaned
             }
         }
