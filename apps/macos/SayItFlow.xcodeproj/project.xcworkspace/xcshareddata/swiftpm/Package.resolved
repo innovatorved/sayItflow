@@ -1,5 +1,5 @@
 {
-  "originHash" : "4a139e5559d9e45865f4e0c8475c02accc2329270773a579769635dc4738fc06",
+  "originHash" : "e20e01a3e08e814f4e0fc0e4ee48473b5ac6255b24b07dc875bff062f63eb351",
   "pins" : [
     {
       "identity" : "desert-ant-core",
@@ -17,6 +17,15 @@
       "state" : {
         "revision" : "1aef85578fdd4f9eaeeb8d53b7b4fc31bf08fe27",
         "version" : "2.4.0"
+      }
+    },
+    {
+      "identity" : "llama.swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/mattt/llama.swift.git",
+      "state" : {
+        "revision" : "dc5b8cb58bfe028f88ade84d1ad0c10842644fb4",
+        "version" : "3.0.0"
       }
     },
     {

@@ -3,6 +3,86 @@ import SwiftUI
 
 // MARK: - Control Enums
 
+/// Selectable on-device GGUF text normalizer running natively in-process via embedded llama.cpp.
+public enum NormalizerModel: String, CaseIterable, Identifiable, Sendable {
+    case emberon2 = "emberon-2"
+    case s1Mini = "s1-mini"
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .emberon2: "Emberon-2 (Lite)"
+        case .s1Mini: "S1-mini (Full)"
+        }
+    }
+
+    public var shortName: String {
+        switch self {
+        case .emberon2: "Emberon-2"
+        case .s1Mini: "S1-mini"
+        }
+    }
+
+    public var author: String {
+        switch self {
+        case .emberon2: "Promethic Labs"
+        case .s1Mini: "Superwhisper"
+        }
+    }
+
+    public var subtitle: String {
+        switch self {
+        case .emberon2: "Promethic Labs · LFM2.5 350M · 200 MB · ~90ms · Metal GPU"
+        case .s1Mini: "Superwhisper · Qwen3 0.6B · 462 MB · Styling Controls · Metal GPU"
+        }
+    }
+
+    public var sizeMB: Int {
+        switch self {
+        case .emberon2: 200
+        case .s1Mini: 462
+        }
+    }
+
+    public var minimumValidBytes: Int64 {
+        switch self {
+        case .emberon2: 150 * 1024 * 1024
+        case .s1Mini: 400 * 1024 * 1024
+        }
+    }
+
+    public var fileName: String {
+        switch self {
+        case .emberon2: "Emberon-2-Q4_K_M.gguf"
+        case .s1Mini: "s1-mini-q4_k_m.gguf"
+        }
+    }
+
+    public var directoryName: String {
+        switch self {
+        case .emberon2: "emberon-2"
+        case .s1Mini: "s1-mini"
+        }
+    }
+
+    public var downloadURLString: String {
+        switch self {
+        case .emberon2:
+            "https://huggingface.co/PromethicLabs/Emberon-2/resolve/main/Emberon-2-Q4_K_M.gguf"
+        case .s1Mini:
+            "https://huggingface.co/superwhisper/s1-mini-GGUF/resolve/main/s1-mini-q4_k_m.gguf"
+        }
+    }
+
+    public var engineAnalyticsTag: String {
+        switch self {
+        case .emberon2: "voz+emberon-2"
+        case .s1Mini: "voz+s1-mini"
+        }
+    }
+}
+
 /// Output style for S1-mini text normalization.
 public enum S1Styling: String, CaseIterable, Identifiable, Sendable {
     case casual = "casual"
@@ -52,16 +132,15 @@ public enum S1Context: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-// MARK: - S1MiniEngine
+// MARK: - S1MiniEngine (Self-Contained In-Process GGUF Normalizer)
 
-/// Coordinates on-device speech-to-text transcript normalization using
-/// "S1-mini" by "Superwhisper" (596M parameter causal LM based on Qwen3-0.6B).
+/// Coordinates on-device speech-to-text transcript normalization directly in-process
+/// via embedded `llama.cpp` (Metal GPU) — zero external apps or servers required.
 ///
-/// Pipeline:
-/// Audio ──▶ Desert Ant Voz (Apple Neural Engine Core ML) ──▶ S1-mini (Text Normalizer) ──▶ Injected Text
-///
-/// Attribution notice (required by Apache 2.0 with Additional Term):
-/// Must continue to identify it by its original name, "S1-mini" by "Superwhisper".
+/// Supports:
+/// - **Emberon-2** by Promethic Labs (350M, ~200 MB, LFM2.5, default/recommended)
+/// - **S1-mini** by Superwhisper (596M, ~462 MB, Qwen3-0.6B, Apache 2.0 with name retention)
+/// - Instant built-in Swift rule normalizer (0 MB) when no GGUF model is downloaded.
 @MainActor
 public final class S1MiniEngine: ObservableObject {
     public static let shared = S1MiniEngine()
@@ -73,11 +152,6 @@ public final class S1MiniEngine: ObservableObject {
     public static let licenseType = "Apache 2.0 (with name retention)"
     public static let modelSizeMB = 462
 
-    private static let downloadURLString = "https://huggingface.co/superwhisper/s1-mini-GGUF/resolve/main/s1-mini-q4_k_m.gguf"
-    private static let modelFileName = "s1-mini-q4_k_m.gguf"
-
-    public static let serverPort: Int = 58231
-
     // MARK: - Published State
 
     @Published public private(set) var isDownloaded: Bool = false
@@ -85,12 +159,24 @@ public final class S1MiniEngine: ObservableObject {
     @Published public private(set) var downloadProgress: Double = 0.0
     @Published public private(set) var lastError: String?
     @Published public private(set) var lastLatencyMs: Double = 0.0
-    @Published public private(set) var isServerRunning: Bool = false
+    @Published public private(set) var isModelLoaded: Bool = false
 
-    private var serverProcess: Process?
-    private var isStartingServer: Bool = false
-    private var idleShutdownTask: Task<Void, Never>?
-    private static let idleShutdownSeconds: TimeInterval = 120
+    /// Backward-compatible alias for `isModelLoaded`.
+    public var isServerRunning: Bool { isModelLoaded }
+
+    private var isWarmingUp: Bool = false
+    private var idleUnloadTask: Task<Void, Never>?
+    private static let idleUnloadSeconds: TimeInterval = 120
+
+    @Published public var selectedModel: NormalizerModel {
+        didSet {
+            UserDefaults.standard.set(selectedModel.rawValue, forKey: Keys.selectedModel)
+            if oldValue != selectedModel {
+                stopServer()
+                refreshStatus()
+            }
+        }
+    }
 
     @Published public var isEnabled: Bool {
         didSet {
@@ -120,6 +206,7 @@ public final class S1MiniEngine: ObservableObject {
     // MARK: - Storage Keys
 
     private enum Keys {
+        static let selectedModel = "sayitflow.normalizer.selectedModel"
         static let isEnabled = "sayitflow.s1mini.enabled"
         static let styling = "sayitflow.s1mini.styling"
         static let structure = "sayitflow.s1mini.structure"
@@ -128,15 +215,31 @@ public final class S1MiniEngine: ObservableObject {
 
     // MARK: - Model Directory
 
-    public var modelFileURL: URL {
+    public func modelFileURL(for model: NormalizerModel) -> URL {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Library/Application Support")
-        let dir = appSupport.appendingPathComponent("SayItFlow/models/s1-mini", isDirectory: true)
-        return dir.appendingPathComponent(Self.modelFileName)
+        let dir = appSupport.appendingPathComponent("SayItFlow/models/\(model.directoryName)", isDirectory: true)
+        return dir.appendingPathComponent(model.fileName)
+    }
+
+    public var modelFileURL: URL {
+        modelFileURL(for: selectedModel)
     }
 
     private init() {
         let defaults = UserDefaults.standard
+
+        if let rawModel = defaults.string(forKey: Keys.selectedModel),
+           let storedModel = NormalizerModel(rawValue: rawModel) {
+            self.selectedModel = storedModel
+        } else {
+            // Preserve S1-mini for existing users who already downloaded it; default to Emberon-2 (200 MB) otherwise.
+            let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+                ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Library/Application Support")
+            let s1Path = appSupport.appendingPathComponent("SayItFlow/models/s1-mini/s1-mini-q4_k_m.gguf").path
+            self.selectedModel = FileManager.default.fileExists(atPath: s1Path) ? .s1Mini : .emberon2
+        }
+
         if defaults.object(forKey: Keys.isEnabled) != nil {
             self.isEnabled = defaults.bool(forKey: Keys.isEnabled)
         } else {
@@ -182,41 +285,42 @@ public final class S1MiniEngine: ObservableObject {
 
     // MARK: - Status & Model Management
 
-    public func refreshStatus() {
-        let url = modelFileURL
-        if FileManager.default.fileExists(atPath: url.path) {
-            do {
-                let attrs = try FileManager.default.attributesOfItem(atPath: url.path)
-                let size = (attrs[.size] as? Int64) ?? 0
-                // Valid if file is > 400 MB
-                isDownloaded = size > 400 * 1024 * 1024
-            } catch {
-                isDownloaded = false
-            }
-        } else {
-            isDownloaded = false
+    public func isModelDownloaded(_ model: NormalizerModel) -> Bool {
+        let url = modelFileURL(for: model)
+        guard FileManager.default.fileExists(atPath: url.path) else { return false }
+        do {
+            let attrs = try FileManager.default.attributesOfItem(atPath: url.path)
+            let size = (attrs[.size] as? Int64) ?? 0
+            return size >= model.minimumValidBytes
+        } catch {
+            return false
         }
     }
 
-    /// Downloads the official S1-mini GGUF model into the local cache.
+    public func refreshStatus() {
+        isDownloaded = isModelDownloaded(selectedModel)
+    }
+
+    /// Downloads the currently selected normalizer GGUF model into the local cache.
     public func downloadModel() async throws {
         guard !isDownloading else { return }
+        let model = selectedModel
         isDownloading = true
         downloadProgress = 0.01
         lastError = nil
 
-        let targetURL = modelFileURL
+        let targetURL = modelFileURL(for: model)
         let dir = targetURL.deletingLastPathComponent()
 
         do {
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
 
-            guard let remoteURL = URL(string: Self.downloadURLString) else {
+            guard let remoteURL = URL(string: model.downloadURLString) else {
                 throw NSError(domain: "S1MiniEngine", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid download URL"])
             }
 
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-                let delegate = S1DownloadSession(
+                let delegate = ModelDownloadSession(
                     targetURL: targetURL,
                     continuation: continuation,
                     onProgress: { [weak self] progress in
@@ -231,7 +335,7 @@ public final class S1MiniEngine: ObservableObject {
                 task.resume()
             }
 
-            isDownloaded = true
+            refreshStatus()
             isDownloading = false
             downloadProgress = 1.0
             if isEnabled {
@@ -247,7 +351,7 @@ public final class S1MiniEngine: ObservableObject {
         }
     }
 
-    /// Deletes the downloaded model file.
+    /// Deletes the downloaded model file for the currently selected normalizer.
     public func deleteModel() throws {
         stopServer()
         let url = modelFileURL
@@ -257,186 +361,74 @@ public final class S1MiniEngine: ObservableObject {
         refreshStatus()
     }
 
-    // MARK: - Server Process Management
+    // MARK: - In-Process Model Lifecycle
 
-    /// Locates the `llama-server` executable on macOS.
-    public func findServerBinary() -> String? {
-        var candidates: [String] = []
-        if let resPath = Bundle.main.path(forResource: "llama-server", ofType: nil) {
-            candidates.append(resPath)
-        }
-        let helpersPath = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/llama-server").path
-        candidates.append(helpersPath)
-
-        let home = NSHomeDirectory()
-        candidates.append(contentsOf: [
-            "/opt/homebrew/bin/llama-server",
-            "/usr/local/bin/llama-server",
-            "\(home)/.homebrew/bin/llama-server",
-            "\(home)/.local/bin/llama-server",
-            "\(home)/homebrew/bin/llama-server",
-            "/opt/homebrew/opt/llama.cpp/bin/llama-server"
-        ])
-
-        for path in candidates {
-            if FileManager.default.isExecutableFile(atPath: path) {
-                return path
-            }
-        }
-
-        if let pathEnv = ProcessInfo.processInfo.environment["PATH"] {
-            for dir in pathEnv.components(separatedBy: ":") {
-                let p = URL(fileURLWithPath: dir).appendingPathComponent("llama-server").path
-                if FileManager.default.isExecutableFile(atPath: p) {
-                    return p
-                }
-            }
-        }
-
-        return nil
-    }
-
-    /// Checks if the local llama-server instance is healthy and responding.
-    public func checkHealth() async -> Bool {
-        guard let url = URL(string: "http://127.0.0.1:\(Self.serverPort)/health") else { return false }
-        var request = URLRequest(url: url)
-        request.timeoutInterval = 0.4
-        do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return false }
-            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let status = json["status"] as? String, status == "ok" {
-                return true
-            }
-        } catch {
-            return false
-        }
-        return false
-    }
-
-    /// Ensures the background llama-server process is active and ready to serve requests.
+    /// Pre-loads the selected GGUF model into Metal GPU memory in-process.
     @discardableResult
     public func ensureServerRunning() async -> Bool {
-        resetIdleShutdownTimer()
-        if await checkHealth() {
-            isServerRunning = true
+        resetIdleUnloadTimer()
+        guard isDownloaded else {
+            isModelLoaded = false
+            return false
+        }
+
+        let path = modelFileURL.path
+        if isModelLoaded, await LocalLlamaRunner.shared.currentModelPath == path {
             return true
         }
 
-        guard isDownloaded else {
-            isServerRunning = false
-            return false
-        }
-
-        guard let binaryPath = findServerBinary() else {
-            AppLogger.dictation.warning("llama-server binary not found on system")
-            isServerRunning = false
-            return false
-        }
-
-        guard !isStartingServer else {
-            for _ in 0..<30 {
-                try? await Task.sleep(nanoseconds: 100_000_000)
-                if isServerRunning { return true }
-                if !isStartingServer { break }
+        guard !isWarmingUp else {
+            for _ in 0..<40 {
+                try? await Task.sleep(nanoseconds: 50_000_000)
+                if isModelLoaded { return true }
+                if !isWarmingUp { break }
             }
-            return isServerRunning
+            return isModelLoaded
         }
 
-        isStartingServer = true
-        defer { isStartingServer = false }
-
-        // Clean up previous process handle
-        if let proc = serverProcess, proc.isRunning {
-            proc.terminate()
-        }
-        serverProcess = nil
-
-        // Clean up any stale process occupying the port off the main thread
-        let port = Self.serverPort
-        await Task.detached(priority: .utility) {
-            let killTask = Process()
-            killTask.executableURL = URL(fileURLWithPath: "/usr/bin/pkill")
-            killTask.arguments = ["-f", "llama-server.*\(port)"]
-            try? killTask.run()
-            killTask.waitUntilExit()
-        }.value
-
-        let proc = Process()
-        proc.executableURL = URL(fileURLWithPath: binaryPath)
-        proc.arguments = [
-            "-m", modelFileURL.path,
-            "--port", "\(Self.serverPort)",
-            "-ngl", "99",
-            "--host", "127.0.0.1",
-            "-c", "2048",
-            "--log-disable"
-        ]
-        proc.standardOutput = FileHandle.nullDevice
-        proc.standardError = FileHandle.nullDevice
+        isWarmingUp = true
+        defer { isWarmingUp = false }
 
         do {
-            try proc.run()
-            serverProcess = proc
+            try await LocalLlamaRunner.shared.load(modelPath: path)
+            isModelLoaded = true
+            resetIdleUnloadTimer()
+            AppLogger.dictation.notice("In-process \(self.selectedModel.shortName) loaded on Metal GPU")
+            return true
         } catch {
-            AppLogger.dictation.error("Failed to run llama-server: \(error.localizedDescription)")
-            isServerRunning = false
+            isModelLoaded = false
+            lastError = error.localizedDescription
+            AppLogger.dictation.error("Failed to load \(self.selectedModel.shortName) in-process: \(error.localizedDescription)")
             return false
         }
-
-        // Wait for health check up to 3 seconds
-        for _ in 0..<30 {
-            try? await Task.sleep(nanoseconds: 100_000_000)
-            if await checkHealth() {
-                isServerRunning = true
-                resetIdleShutdownTimer()
-                AppLogger.dictation.notice("llama-server started successfully on port \(Self.serverPort)")
-                return true
-            }
-        }
-
-        isServerRunning = false
-        AppLogger.dictation.error("llama-server failed to respond to health check within 3s")
-        return false
     }
 
-    /// Stops the local llama-server background process without blocking the main thread.
+    /// Unloads the in-process GGUF model immediately to reclaim RAM/VRAM.
     public func stopServer() {
-        idleShutdownTask?.cancel()
-        idleShutdownTask = nil
-        if let proc = serverProcess, proc.isRunning {
-            proc.terminate()
+        idleUnloadTask?.cancel()
+        idleUnloadTask = nil
+        isModelLoaded = false
+        Task {
+            await LocalLlamaRunner.shared.unload()
         }
-        serverProcess = nil
-        isServerRunning = false
-
-        let killTask = Process()
-        killTask.executableURL = URL(fileURLWithPath: "/usr/bin/pkill")
-        killTask.arguments = ["-f", "llama-server.*\(Self.serverPort)"]
-        try? killTask.run()
     }
 
-    // MARK: - Idle Shutdown
+    // MARK: - Idle Unload
 
-    private func resetIdleShutdownTimer() {
-        idleShutdownTask?.cancel()
-        idleShutdownTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: UInt64(Self.idleShutdownSeconds * 1_000_000_000))
+    private func resetIdleUnloadTimer() {
+        idleUnloadTask?.cancel()
+        idleUnloadTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(Self.idleUnloadSeconds * 1_000_000_000))
             guard !Task.isCancelled else { return }
             await MainActor.run { self?.stopServer() }
-            AppLogger.dictation.notice("S1MiniEngine: llama-server stopped after idle timeout")
+            AppLogger.dictation.notice("Normalizer model unloaded after idle timeout")
         }
     }
 
     // MARK: - Normalization Pipeline
 
-    /// Normalizes a speech-to-text transcript.
-    ///
-    /// - Parameters:
-    ///   - rawTranscript: Raw transcript output from Desert Ant Voz.
-    ///   - language: ISO language code (e.g. "en").
-    ///   - contextOverride: Optional automatic context when engine context is `.general`.
-    /// - Returns: Cleaned, punctuated, normalized text ready for injection.
+    /// Normalizes a speech-to-text transcript using the embedded in-process GGUF model
+    /// (or the instant Swift rule normalizer if no model is downloaded).
     public func normalize(
         _ rawTranscript: String,
         language: String = "en",
@@ -445,12 +437,12 @@ public final class S1MiniEngine: ObservableObject {
         let trimmed = rawTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return "" }
 
-        // Gate 1: S1-mini is English-only. If non-English, preserve Voz raw transcript directly.
+        // Gate 1: Both Emberon-2 and S1-mini are English-only. Preserve non-English Voz output directly.
         guard language == "en" else {
             return trimmed
         }
 
-        // Gate 2: If S1-mini post-processing is disabled, return raw transcript.
+        // Gate 2: If post-processing is disabled, return raw transcript.
         guard isEnabled else {
             return trimmed
         }
@@ -462,82 +454,73 @@ public final class S1MiniEngine: ObservableObject {
 
         let start = CFAbsoluteTimeGetCurrent()
 
-        // Inference Attempt: If model is downloaded and inference runner is available
         if isDownloaded {
-            if let output = await runInference(rawText: trimmed, contextOverride: contextOverride) {
+            if let output = await runInProcessInference(rawText: trimmed, contextOverride: contextOverride) {
                 let elapsed = (CFAbsoluteTimeGetCurrent() - start) * 1000.0
                 lastLatencyMs = elapsed
-                resetIdleShutdownTimer()
+                resetIdleUnloadTimer()
                 return output
             }
         }
 
-        // Fallback: Swift speech normalizer (removes disfluencies, fixes casing/punctuation)
+        // Fallback: instant Swift speech normalizer (removes disfluencies, fixes casing/punctuation)
         let fallbackPolished = ruleBasedNormalize(trimmed)
         let elapsed = (CFAbsoluteTimeGetCurrent() - start) * 1000.0
         lastLatencyMs = elapsed
-        resetIdleShutdownTimer()
         return fallbackPolished
     }
 
     // MARK: - Prompt Formatting
 
-    /// Formats the prompt according to S1-mini specifications.
-    ///
-    /// System prompt specifies text normalizer role.
-    /// User message starts with control line: `[Styling: ...] [Structure: ...] [Context: ...]`.
-    /// Assistant turn is pre-seeded with `<think>\n\n</think>\n\n` to enforce `enable_thinking=false`.
+    /// Formats the S1-mini ChatML prompt (Qwen3-0.6B with closed `<think>` block).
     public func buildPrompt(for rawTranscript: String, contextOverride: S1Context? = nil) -> String {
         let activeContext = (context == .general ? (contextOverride ?? context) : context)
         return "<|im_start|>system\nYou are a text normalizer for speech-to-text transcripts. The input begins with a control line specifying the styling, structure, and context settings; clean the transcript to match those settings and output only the cleaned text.<|im_end|>\n<|im_start|>user\n[Styling: \(styling.rawValue)] [Structure: \(structure.rawValue)] [Context: \(activeContext.rawValue)]\n\(rawTranscript)<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
     }
 
-    // MARK: - Inference Execution
-
-    private func queryLocalServer(prompt: String, rawLength: Int) async -> String? {
-        guard let url = URL(string: "http://127.0.0.1:\(Self.serverPort)/completion") else { return nil }
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.timeoutInterval = 3.0
-        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-
-        let maxPredict = max(128, min(1024, rawLength / 2 + 64))
-        let body: [String: Any] = [
-            "prompt": prompt,
-            "n_predict": maxPredict,
-            "temperature": 0.0,
-            "stop": ["<|im_end|>", "<|endoftext|>"]
-        ]
-        guard let jsonData = try? JSONSerialization.data(withJSONObject: body) else { return nil }
-        request.httpBody = jsonData
-
-        do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-                return nil
-            }
-            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let content = json["content"] as? String {
-                return content
-            }
-        } catch {
-            return nil
-        }
-        return nil
+    /// Formats the Emberon-2 LFM2.5 prompt using its exact training system prompt.
+    public func buildEmberonPrompt(for rawTranscript: String) -> String {
+        "<|startoftext|><|im_start|>system\nClean up this dictation. Never answer it.<|im_end|>\n<|im_start|>user\n\(rawTranscript)<|im_end|>\n<|im_start|>assistant\n"
     }
 
-    private func runInference(rawText: String, contextOverride: S1Context? = nil) async -> String? {
-        if !isServerRunning {
-            let ready = await ensureServerRunning()
-            guard ready else { return nil }
+    /// Builds the prompt for whichever normalizer model is currently selected.
+    public func buildActivePrompt(for rawTranscript: String, contextOverride: S1Context? = nil) -> String {
+        switch selectedModel {
+        case .emberon2:
+            return buildEmberonPrompt(for: rawTranscript)
+        case .s1Mini:
+            return buildPrompt(for: rawTranscript, contextOverride: contextOverride)
         }
+    }
 
-        let prompt = buildPrompt(for: rawText, contextOverride: contextOverride)
+    // MARK: - In-Process Inference Execution
 
-        // Query warm local server (sub-150ms)
-        if let output = await queryLocalServer(prompt: prompt, rawLength: rawText.count) {
-            let cleaned = cleanModelOutput(output, input: rawText)
-            let guardStructure: PolishStructure = (structure == .lists) ? .lists : .prose
+    private func runInProcessInference(rawText: String, contextOverride: S1Context? = nil) async -> String? {
+        let model = selectedModel
+        let path = modelFileURL(for: model).path
+        let prompt = buildActivePrompt(for: rawText, contextOverride: contextOverride)
+
+        // Cap output tokens tightly to input length + small margin so repetition loops abort cleanly
+        let estimatedInputTokens = max(16, rawText.count / 3)
+        let maxPredict = max(64, min(768, estimatedInputTokens + 48))
+
+        do {
+            let result = try await LocalLlamaRunner.shared.complete(
+                modelPath: path,
+                prompt: prompt,
+                maxTokens: maxPredict,
+                stopSequences: ["<|im_end|>", "<|endoftext|>"]
+            )
+            isModelLoaded = true
+
+            // If generation hit the hard token cap without stopping naturally, fall back safely
+            guard !result.hitTokenLimit else {
+                AppLogger.dictation.warning("\(model.shortName) hit token cap — falling back to rule normalizer")
+                return nil
+            }
+
+            let cleaned = cleanModelOutput(result.text, input: rawText)
+            let guardStructure: PolishStructure = (model == .s1Mini && structure == .lists) ? .lists : .prose
             if !cleaned.isEmpty, PolishOutputGuard.shouldApplyPolishResult(
                 raw: rawText,
                 polished: cleaned,
@@ -545,6 +528,9 @@ public final class S1MiniEngine: ObservableObject {
             ) {
                 return cleaned
             }
+        } catch {
+            isModelLoaded = false
+            AppLogger.dictation.error("In-process \(model.shortName) inference failed: \(error.localizedDescription)")
         }
 
         return nil
@@ -565,9 +551,10 @@ public final class S1MiniEngine: ObservableObject {
             }
         }
 
-        // Strip endoftext token if echoed
+        // Strip special tokens if echoed
         output = output.replacingOccurrences(of: "<|im_end|>", with: "")
         output = output.replacingOccurrences(of: "<|endoftext|>", with: "")
+        output = output.replacingOccurrences(of: "<|startoftext|>", with: "")
         output = output.trimmingCharacters(in: .whitespacesAndNewlines)
 
         // If the model produced empty text and input was not filler-only, return fallback
@@ -580,9 +567,6 @@ public final class S1MiniEngine: ObservableObject {
 
     // MARK: - Rule-Based Speech Normalizer
 
-    /// Instant, high-speed fallback speech normalizer.
-    /// Collapses filler words, stutters, and normalizes capitalization.
-    /// Pre-compiled regex patterns for speech disfluency removal (allocated once).
     nonisolated(unsafe) private static let fillerRegexes: [NSRegularExpression] = {
         let patterns = [
             "\\b(um|uh|erm|ah)\\b,?\\s*",
@@ -649,7 +633,7 @@ public final class S1MiniEngine: ObservableObject {
 
 // MARK: - Download Session Delegate
 
-private final class S1DownloadSession: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
+private final class ModelDownloadSession: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
     private let targetURL: URL
     private let continuation: CheckedContinuation<Void, Error>
     private let onProgress: @Sendable (Double) -> Void
@@ -678,6 +662,17 @@ private final class S1DownloadSession: NSObject, URLSessionDownloadDelegate, @un
         guard !hasResumed else { return }
         hasResumed = true
 
+        defer { session.finishTasksAndInvalidate() }
+
+        if let http = downloadTask.response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            continuation.resume(throwing: NSError(
+                domain: "S1MiniEngine",
+                code: http.statusCode,
+                userInfo: [NSLocalizedDescriptionKey: "Download failed with HTTP \(http.statusCode)"]
+            ))
+            return
+        }
+
         do {
             if FileManager.default.fileExists(atPath: targetURL.path) {
                 try FileManager.default.removeItem(at: targetURL)
@@ -695,8 +690,8 @@ private final class S1DownloadSession: NSObject, URLSessionDownloadDelegate, @un
             defer { lock.unlock() }
             guard !hasResumed else { return }
             hasResumed = true
+            session.finishTasksAndInvalidate()
             continuation.resume(throwing: error)
         }
     }
 }
-

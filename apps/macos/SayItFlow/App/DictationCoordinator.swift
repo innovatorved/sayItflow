@@ -3,53 +3,21 @@ import AVFoundation
 import Foundation
 import KeyboardShortcuts
 
-private final class AudioSampleCollector: @unchecked Sendable {
-    private let lock = NSLock()
-    private var samples: [Float] = {
-        var arr = [Float]()
-        arr.reserveCapacity(16000 * 120) // Pre-allocate for ~120 seconds at 16kHz
-        return arr
-    }()
-    private var sampleRate: Double = 16000.0
-
-    func append(buffer: AVAudioPCMBuffer) {
-        guard let channelData = buffer.floatChannelData?[0], buffer.frameLength > 0 else { return }
-        let count = Int(buffer.frameLength)
-        let rate = buffer.format.sampleRate
-        lock.lock()
-        samples.append(contentsOf: UnsafeBufferPointer(start: channelData, count: count))
-        sampleRate = rate
-        lock.unlock()
-    }
-
-    func drain() -> (samples: [Float], sampleRate: Double) {
-        lock.lock()
-        defer { lock.unlock() }
-        let collected = samples
-        let rate = sampleRate
-        samples.removeAll(keepingCapacity: true)
-        return (collected, rate)
-    }
-
-    func clear() {
-        lock.lock()
-        samples.removeAll(keepingCapacity: true)
-        lock.unlock()
-    }
-}
-
 @MainActor
 final class DictationCoordinator {
     private weak var appState: AppState?
     private let audioInput = AudioInput()
     private let collector = AudioSampleCollector()
+    private let startSound = NSSound(named: NSSound.Name("Tink"))
+    private let doneSound = NSSound(named: NSSound.Name("Pop"))
     private var levelTask: Task<Void, Never>?
-    private var audioCaptureTask: Task<Void, Never>?
     private var sessionGeneration: UInt64 = 0
     private var activeSession = false
     private var isProcessingRelease = false
     private var sessionStartedAt: Date?
     private var pinnedPID: pid_t?
+    private var pinnedAppName: String?
+    private var pinnedBundleID: String?
 
     var onboardingInjectionHandler: ((String) -> Void)?
     var onboardingLiveUpdateHandler: ((String) -> Void)?
@@ -59,6 +27,10 @@ final class DictationCoordinator {
 
     init(appState: AppState) {
         self.appState = appState
+        let collector = self.collector
+        audioInput.onBuffer = { buffer in
+            collector.append(buffer: buffer)
+        }
         audioInput.onConfigurationChange = { [weak self] in
             Task { @MainActor in
                 self?.handleAudioConfigurationLost()
@@ -113,6 +85,8 @@ final class DictationCoordinator {
         collector.clear()
         let frontApp = NSWorkspace.shared.frontmostApplication
         pinnedPID = frontApp?.processIdentifier
+        pinnedAppName = frontApp?.localizedName
+        pinnedBundleID = frontApp?.bundleIdentifier
         let targetIcon = frontApp?.icon ?? NSApp.applicationIconImage
 
         // In hold-space mode, if the initial Space keyDown passed through before the 0.25s hold
@@ -130,7 +104,8 @@ final class DictationCoordinator {
         }
 
         if AppSettings.shared.soundFeedbackEnabled {
-            NSSound(named: NSSound.Name("Tink"))?.play()
+            startSound?.stop()
+            startSound?.play()
         }
 
         appState?.phase = .recording
@@ -155,7 +130,6 @@ final class DictationCoordinator {
             }
         }
 
-        startAudioCapture()
         startLevelMonitor(generation: generation)
     }
 
@@ -165,8 +139,6 @@ final class DictationCoordinator {
         isProcessingRelease = true
         stopLevelMonitor()
         audioInput.stop()
-        audioCaptureTask?.cancel()
-        audioCaptureTask = nil
 
         let (samplesToTranscribe, sampleRate) = collector.drain()
 
@@ -176,7 +148,8 @@ final class DictationCoordinator {
             return
         }
 
-        AppLogger.dictation.notice("finishSession: Transcribing \(samplesToTranscribe.count) samples (\(String(format: "%.2f", Double(samplesToTranscribe.count) / sampleRate))s) at \(sampleRate) Hz")
+        let audioDurationSeconds = Double(samplesToTranscribe.count) / sampleRate
+        AppLogger.dictation.notice("finishSession: Transcribing \(samplesToTranscribe.count) samples (\(String(format: "%.2f", audioDurationSeconds))s) at \(sampleRate) Hz")
 
         appState?.phase = .transcribing
         appState?.hudMessage = "Transcribing with Voz…"
@@ -187,8 +160,12 @@ final class DictationCoordinator {
 
         let startedAt = sessionStartedAt ?? Date()
         let pinnedApp = pinnedPID
+        let capturedAppName = pinnedAppName
+        let capturedBundleID = pinnedBundleID
 
         Task {
+            var hudDwellNanoseconds: UInt64 = 350_000_000
+
             do {
                 let result = try await VozEngine.shared.transcribe(
                     samples: samplesToTranscribe,
@@ -197,25 +174,36 @@ final class DictationCoordinator {
 
                 guard generation == self.sessionGeneration else { return }
 
-                var transcript = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                let rawTranscript = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                var transcript = rawTranscript
                 AppLogger.dictation.notice("Voz raw output: '\(transcript)'")
 
                 if !transcript.isEmpty {
                     let currentLang = EngineSettings.shared.selectedLanguage
                     let isEnglish = (currentLang == "en")
-                    let targetBundle = (pinnedApp != nil ? NSRunningApplication(processIdentifier: pinnedApp!)?.bundleIdentifier : nil)
+                    let targetBundle = capturedBundleID
+                        ?? (pinnedApp != nil ? NSRunningApplication(processIdentifier: pinnedApp!)?.bundleIdentifier : nil)
                         ?? NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+                    let targetAppName = capturedAppName
+                        ?? (pinnedApp != nil ? NSRunningApplication(processIdentifier: pinnedApp!)?.localizedName : nil)
+                        ?? NSWorkspace.shared.frontmostApplication?.localizedName
 
-                    // Apply S1-mini speech text normalization if enabled and language is English
+                    // Apply on-device speech text normalization if enabled and language is English
                     if S1MiniEngine.shared.isEnabled && isEnglish {
-                        self.appState?.hudMessage = "Polishing with S1-mini…"
+                        let normalizerName = S1MiniEngine.shared.selectedModel.shortName
+                        self.appState?.phase = .polishing
+                        self.appState?.hudMessage = "Polishing with \(normalizerName)…"
+                        RecordingHUDController.shared.show(
+                            state: .polishing,
+                            displayMode: .minimal
+                        )
                         let contextOverride = AppContext.s1Context(forBundleID: targetBundle)
                         transcript = await S1MiniEngine.shared.normalize(
                             transcript,
                             language: currentLang,
                             contextOverride: contextOverride
                         )
-                        AppLogger.dictation.notice("S1-mini normalized output: '\(transcript)'")
+                        AppLogger.dictation.notice("\(normalizerName) normalized output: '\(transcript)'")
                     }
 
                     guard generation == self.sessionGeneration else { return }
@@ -231,8 +219,8 @@ final class DictationCoordinator {
                         return
                     }
 
-                    // Apply user's custom vocabulary casing/replacements
-                    transcript = VocabularyStore.load().applyCaseCorrections(to: transcript)
+                    // Apply user's custom vocabulary casing/replacements (cached in memory)
+                    transcript = VocabularyStore.applyCaseCorrections(to: transcript)
 
                     self.appState?.partialTranscript = transcript
                     self.appState?.noteWords(in: transcript)
@@ -242,6 +230,9 @@ final class DictationCoordinator {
                     // When pinnedApp is an external app, always inject there.
                     let ownPID = ProcessInfo.processInfo.processIdentifier
                     let isOwnApp = (pinnedApp != nil && pinnedApp == ownPID)
+                    var injectionSucceeded = true
+                    var injectionErrorMessage: String?
+
                     if isOwnApp, let onboardingHandler = self.onboardingInjectionHandler {
                         onboardingHandler(transcript)
                     } else {
@@ -251,33 +242,63 @@ final class DictationCoordinator {
                         do {
                             try TextInjector().inject(transcript, options: options)
                         } catch {
+                            injectionSucceeded = false
+                            injectionErrorMessage = error.localizedDescription
                             AppLogger.dictation.error("Text injection failed: \(error.localizedDescription)")
                         }
                     }
 
-                    if AppSettings.shared.soundFeedbackEnabled {
-                        NSSound(named: NSSound.Name("Pop"))?.play()
-                    }
-
+                    let engineName = S1MiniEngine.shared.isEnabled && isEnglish
+                        ? S1MiniEngine.shared.selectedModel.engineAnalyticsTag
+                        : "voz"
                     let wordCount = transcript.split(whereSeparator: { $0.isWhitespace || $0.isNewline }).count
+
+                    // Persist timestamped transcript to local history store
+                    TranscriptHistoryStore.shared.record(
+                        text: transcript,
+                        rawText: rawTranscript,
+                        timestamp: startedAt,
+                        durationSeconds: audioDurationSeconds,
+                        language: currentLang,
+                        engine: engineName,
+                        targetAppName: targetAppName,
+                        targetBundleID: targetBundle,
+                        injectionSucceeded: injectionSucceeded
+                    )
+
                     DictationAnalytics.shared.record(
                         startedAt: startedAt,
                         words: wordCount,
                         chars: transcript.count,
                         chunksCommitted: 1,
                         mode: "batch",
-                        engine: S1MiniEngine.shared.isEnabled && isEnglish ? "voz+s1-mini" : "voz",
-                        outcome: "done"
+                        engine: engineName,
+                        outcome: injectionSucceeded ? "done" : "error"
                     )
 
-                    // Allow immediate re-press while the "Done" HUD pill fades out
+                    // Allow immediate re-press while the HUD pill fades out
                     self.isProcessingRelease = false
-                    self.appState?.phase = .idle
-                    self.appState?.hudMessage = "Done"
-                    RecordingHUDController.shared.show(
-                        state: .done,
-                        displayMode: .minimal
-                    )
+                    if injectionSucceeded {
+                        if AppSettings.shared.soundFeedbackEnabled {
+                            self.doneSound?.stop()
+                            self.doneSound?.play()
+                        }
+                        self.appState?.phase = .idle
+                        self.appState?.hudMessage = "Done"
+                        RecordingHUDController.shared.show(
+                            state: .done,
+                            displayMode: .minimal
+                        )
+                    } else {
+                        hudDwellNanoseconds = 2_200_000_000
+                        let message = injectionErrorMessage ?? "Copied to clipboard — press ⌘V"
+                        self.appState?.phase = .error(message)
+                        self.appState?.hudMessage = message
+                        RecordingHUDController.shared.show(
+                            state: .error(message),
+                            displayMode: .full
+                        )
+                    }
                 } else {
                     AppLogger.dictation.notice("Voz produced empty transcript for session")
                     self.isProcessingRelease = false
@@ -294,6 +315,7 @@ final class DictationCoordinator {
                     engine: "voz",
                     outcome: "error"
                 )
+                hudDwellNanoseconds = 2_200_000_000
                 self.isProcessingRelease = false
                 self.appState?.phase = .error(error.localizedDescription)
                 RecordingHUDController.shared.show(
@@ -302,7 +324,7 @@ final class DictationCoordinator {
                 )
             }
 
-            try? await Task.sleep(nanoseconds: 350_000_000)
+            try? await Task.sleep(nanoseconds: hudDwellNanoseconds)
             guard generation == self.sessionGeneration else { return }
             self.finishIdle()
         }
@@ -312,8 +334,6 @@ final class DictationCoordinator {
         let startedAt = sessionStartedAt
         sessionGeneration &+= 1
         stopLevelMonitor()
-        audioCaptureTask?.cancel()
-        audioCaptureTask = nil
         audioInput.stop()
         collector.clear()
 
@@ -346,16 +366,6 @@ final class DictationCoordinator {
         RecordingHUDController.shared.hide()
     }
 
-    private func startAudioCapture() {
-        audioCaptureTask?.cancel()
-        audioCaptureTask = Task { [audioInput, collector] in
-            for await wrapped in audioInput.bufferStream {
-                guard !Task.isCancelled else { break }
-                collector.append(buffer: wrapped.buffer)
-            }
-        }
-    }
-
     private func startLevelMonitor(generation: UInt64) {
         levelTask?.cancel()
         levelTask = Task { [weak self, audioInput] in
@@ -366,8 +376,6 @@ final class DictationCoordinator {
                 await MainActor.run {
                     guard let self, self.sessionGeneration == generation, self.activeSession else { return }
                     self.activeSession = false
-                    self.audioCaptureTask?.cancel()
-                    self.audioCaptureTask = nil
                     self.audioInput.stop()
                     self.appState?.phase = .error(error.localizedDescription)
                     RecordingHUDController.shared.show(

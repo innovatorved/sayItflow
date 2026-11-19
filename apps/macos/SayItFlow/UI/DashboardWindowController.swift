@@ -1,6 +1,10 @@
 import AppKit
 import SwiftUI
 
+extension Notification.Name {
+    static let sayItFlowSelectSection = Notification.Name("com.innovatorved.sayitflow.selectSection")
+}
+
 @MainActor
 final class DashboardWindowController: NSObject, NSWindowDelegate {
     static let shared = DashboardWindowController()
@@ -13,17 +17,20 @@ final class DashboardWindowController: NSObject, NSWindowDelegate {
 
     var isPresented: Bool { window != nil }
 
-    func present() {
+    func present(section: MainWindowSection? = nil) {
         AppState.shared.enterSetupMode()
         AppState.shared.refreshPermissionStatuses()
 
         if let window {
+            if let section {
+                NotificationCenter.default.post(name: .sayItFlowSelectSection, object: section)
+            }
             window.centerOnVisibleScreen()
             window.presentFrontmost()
             return
         }
 
-        let root = DashboardView()
+        let root = DashboardView(initialSection: section)
             .environmentObject(AppState.shared)
 
         let hosting = NSHostingController(rootView: root)
@@ -31,11 +38,12 @@ final class DashboardWindowController: NSObject, NSWindowDelegate {
         let frame = NSRect(origin: .zero, size: size)
         let window = NSWindow(
             contentRect: frame,
-            styleMask: [.titled, .closable, .miniaturizable],
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
         )
         window.title = "SayItFlow"
+        window.minSize = NSSize(width: 860, height: 620)
         window.contentViewController = hosting
         window.isReleasedWhenClosed = false
         window.delegate = self

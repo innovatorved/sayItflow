@@ -62,4 +62,44 @@ final class PasteboardRescueTests: XCTestCase {
         PasteboardRescue.restore(saved, to: pasteboard)
         XCTAssertEqual(pasteboard.string(forType: .string), "first")
     }
+
+    func testRestoreIfUnchangedSkipsRestoreWhenUserCopiedSomethingNew() {
+        pasteboard.clearContents()
+        pasteboard.setString("original", forType: .string)
+        let saved = PasteboardRescue.snapshot(pasteboard)
+
+        pasteboard.clearContents()
+        pasteboard.setString("dictated", forType: .string)
+        let expectedCount = pasteboard.changeCount
+
+        // User copies something new before restoreDelay fires
+        pasteboard.clearContents()
+        pasteboard.setString("user new copy", forType: .string)
+
+        let restored = PasteboardRescue.restoreIfUnchanged(
+            saved,
+            expectedChangeCount: expectedCount,
+            to: pasteboard
+        )
+        XCTAssertFalse(restored)
+        XCTAssertEqual(pasteboard.string(forType: .string), "user new copy")
+    }
+
+    func testRestoreIfUnchangedRestoresWhenUnmodified() {
+        pasteboard.clearContents()
+        pasteboard.setString("original", forType: .string)
+        let saved = PasteboardRescue.snapshot(pasteboard)
+
+        pasteboard.clearContents()
+        pasteboard.setString("dictated", forType: .string)
+        let expectedCount = pasteboard.changeCount
+
+        let restored = PasteboardRescue.restoreIfUnchanged(
+            saved,
+            expectedChangeCount: expectedCount,
+            to: pasteboard
+        )
+        XCTAssertTrue(restored)
+        XCTAssertEqual(pasteboard.string(forType: .string), "original")
+    }
 }

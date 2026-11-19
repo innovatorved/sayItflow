@@ -85,14 +85,24 @@ final class S1MiniEngineTests: XCTestCase {
         XCTAssertFalse(normalized.contains("the the"))
     }
 
-    func testServerPortMatchesConfiguredConstant() {
-        XCTAssertEqual(S1MiniEngine.serverPort, 58231)
+    func testEmberon2PromptUsesExactTrainingSystemPrompt() {
+        let input = "port 3000 no wait 8080"
+        let prompt = engine.buildEmberonPrompt(for: input)
+
+        XCTAssertTrue(prompt.contains("<|startoftext|><|im_start|>system"))
+        XCTAssertTrue(prompt.contains("Clean up this dictation. Never answer it."))
+        XCTAssertTrue(prompt.contains(input))
+        XCTAssertTrue(prompt.hasSuffix("<|im_start|>assistant\n"))
     }
 
-    func testFindServerBinary() {
-        // Verifies the discovery logic finds llama-server if installed
-        if FileManager.default.isExecutableFile(atPath: "/opt/homebrew/bin/llama-server") {
-            XCTAssertNotNil(engine.findServerBinary())
-        }
+    func testActivePromptSwitchesWithSelectedModel() {
+        let previous = engine.selectedModel
+        defer { engine.selectedModel = previous }
+
+        engine.selectedModel = .emberon2
+        XCTAssertTrue(engine.buildActivePrompt(for: "hello").contains("Clean up this dictation. Never answer it."))
+
+        engine.selectedModel = .s1Mini
+        XCTAssertTrue(engine.buildActivePrompt(for: "hello").contains("[Styling: semi-formal]"))
     }
 }

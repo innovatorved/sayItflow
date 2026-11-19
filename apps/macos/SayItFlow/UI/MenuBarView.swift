@@ -4,6 +4,7 @@ import SwiftUI
 struct MenuBarView: View {
     @EnvironmentObject private var appState: AppState
     @ObservedObject private var settings = AppSettings.shared
+    @ObservedObject private var history = TranscriptHistoryStore.shared
     @Environment(\.openSettings) private var openSettingsPanel
     @State private var hoveredRow: String?
 
@@ -22,13 +23,24 @@ struct MenuBarView: View {
                 }
 
                 MenuActionRow(
+                    id: "history",
+                    title: "Transcript History",
+                    detail: history.entries.isEmpty ? "Saved notes with timestamps" : "\(history.entries.count) saved · click to search",
+                    systemImage: "clock.arrow.circlepath",
+                    isHovered: hoveredRow == "history"
+                ) {
+                    appState.openDashboard(section: .history)
+                }
+                .onHover { hoveredRow = $0 ? "history" : nil }
+
+                MenuActionRow(
                     id: "dashboard",
                     title: "Open Studio Dashboard",
                     detail: "Voz engine, speech settings, test",
                     systemImage: "macwindow",
                     isHovered: hoveredRow == "dashboard"
                 ) {
-                    appState.openDashboard()
+                    appState.openDashboard(section: .status)
                 }
                 .onHover { hoveredRow = $0 ? "dashboard" : nil }
 
@@ -102,7 +114,7 @@ struct MenuBarView: View {
 
     private var permissionAlertRow: some View {
         Button {
-            appState.openDashboard()
+            appState.openDashboard(section: .permissions)
         } label: {
             HStack(spacing: 10) {
                 Image(systemName: "exclamationmark.shield.fill")

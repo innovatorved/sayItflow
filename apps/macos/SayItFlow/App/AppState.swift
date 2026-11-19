@@ -249,8 +249,8 @@ final class AppState: ObservableObject {
         }
     }
 
-    func openDashboard() {
-        DashboardWindowController.shared.present()
+    func openDashboard(section: MainWindowSection? = nil) {
+        DashboardWindowController.shared.present(section: section)
     }
 
     func startHotkeyForOnboardingTry() {
@@ -288,6 +288,7 @@ final class AppState: ObservableObject {
         coordinator?.cancel(reason: "shutdown")
         hotkeyEngine?.stop()
         S1MiniEngine.shared.stopServer()
+        TranscriptHistoryStore.shared.flushSync()
     }
 
     func noteWords(in text: String) {

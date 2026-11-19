@@ -72,6 +72,9 @@ final class AudioInput: @unchecked Sendable {
     var onConfigurationChange: (@Sendable () -> Void)?
     /// Sample rate may change; downstream recognition must restart.
     var onInputDeviceChanged: (@Sendable () -> Void)?
+    /// Direct zero-copy buffer callback invoked synchronously on the audio tap thread while streaming.
+    /// Guarantees every captured sample up to `stop()` is delivered with zero AsyncStream scheduling lag.
+    var onBuffer: (@Sendable (AVAudioPCMBuffer) -> Void)?
 
     var peakLevel: Float { lock.withLock { $0.latestPeakLevel } }
 
@@ -162,7 +165,14 @@ final class AudioInput: @unchecked Sendable {
             return pending
         }
         logPhase("beginStreaming active")
-        for wrapped in pending { deliver(wrapped) }
+        let directCallback = onBuffer
+        for wrapped in pending {
+            if let directCallback {
+                directCallback(wrapped.buffer)
+            } else {
+                deliver(wrapped)
+            }
+        }
     }
 
     private func removeTapOnQueue() {
@@ -448,8 +458,15 @@ final class AudioInput: @unchecked Sendable {
     private func emit(buffer: AVAudioPCMBuffer) {
         guard buffer.frameLength > 0 else { return }
         let level = computePeakLevel(buffer)
+        let (isStreaming, hasContinuation) = lock.withLock { state -> (Bool, Bool) in
+            state.latestPeakLevel = level
+            return (state.phase == .streaming, state.continuation != nil)
+        }
+        if let directCallback = onBuffer, isStreaming {
+            directCallback(buffer)
+            if !hasContinuation { return }
+        }
         guard let copy = copyBuffer(buffer) else { return }
-        lock.withLock { $0.latestPeakLevel = level }
         deliver(SendablePCMBuffer(buffer: copy))
     }
 

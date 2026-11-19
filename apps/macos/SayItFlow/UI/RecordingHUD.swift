@@ -23,17 +23,22 @@ enum HUDState: Equatable {
 }
 
 @MainActor
+final class RecordingHUDModel: ObservableObject {
+    @Published var state: HUDState = .hidden
+    @Published var partialText: String = ""
+    @Published var hotkeyLabel: String = "hotkey"
+    @Published var displayMode: HUDDisplayMode = .full
+    @Published var audioLevel: Float = 0
+    @Published var targetAppIcon: NSImage?
+}
+
+@MainActor
 final class RecordingHUDController: NSObject {
     static let shared = RecordingHUDController()
 
+    private let model = RecordingHUDModel()
     private var panel: NSPanel?
     private var hostingView: NSHostingView<RecordingHUDView>?
-    private var targetAppIcon: NSImage?
-    private var partialText = ""
-    private var currentState: HUDState = .hidden
-    private var hotkeyLabel = "hotkey"
-    private var displayMode: HUDDisplayMode = .full
-    private var audioLevel: Float = 0
     private var placementScreen: NSScreen?
     private var globalEscapeMonitor: Any?
     private var localEscapeMonitor: Any?
@@ -57,15 +62,16 @@ final class RecordingHUDController: NSObject {
             releaseDismissed = false
         }
         if let hotkeyLabel {
-            self.hotkeyLabel = hotkeyLabel
+            model.hotkeyLabel = hotkeyLabel
         }
         if let targetAppIcon {
-            self.targetAppIcon = targetAppIcon
-        } else if self.targetAppIcon == nil {
-            self.targetAppIcon = NSWorkspace.shared.frontmostApplication?.icon ?? NSApp.applicationIconImage
+            model.targetAppIcon = targetAppIcon
+        } else if model.targetAppIcon == nil {
+            model.targetAppIcon = NSWorkspace.shared.frontmostApplication?.icon ?? NSApp.applicationIconImage
         }
-        self.displayMode = displayMode
-        currentState = state
+        let modeChanged = model.displayMode != displayMode
+        model.displayMode = displayMode
+        model.state = state
         if state == .listening {
             placementScreen = NSScreen.main ?? NSScreen.screens.first
         }
@@ -73,9 +79,9 @@ final class RecordingHUDController: NSObject {
         if let panel {
             applyMouseHandling(to: panel)
         }
-        resizePanel()
-        updateView()
-        positionBottomCenter()
+        if modeChanged || state == .listening || panel?.isVisible != true {
+            resizePanel()
+        }
         panel?.orderFront(nil)
         installEscapeMonitors()
     }
@@ -83,48 +89,47 @@ final class RecordingHUDController: NSObject {
     /// Hide at key release and ignore non-listening shows until the next session.
     func dismissForRelease() {
         releaseDismissed = true
-        currentState = .hidden
-        audioLevel = 0
-        partialText = ""
-        targetAppIcon = nil
+        model.state = .hidden
+        model.audioLevel = 0
+        model.partialText = ""
+        model.targetAppIcon = nil
         placementScreen = nil
         panel?.orderOut(nil)
         removeEscapeMonitors()
     }
 
     func updatePartial(_ text: String, keepListeningLabel: Bool = false) {
-        partialText = text
-        if displayMode == .full,
+        model.partialText = text
+        if model.displayMode == .full,
            !keepListeningLabel,
-           currentState == .listening || currentState == .transcribing {
-            currentState = .transcribing
+           model.state == .listening || model.state == .transcribing {
+            model.state = .transcribing
         }
-        updateView()
     }
 
     func updateAudioLevel(_ level: Float) {
         let clamped = min(max(level, 0), 1)
         // Low-pass exponential smoothing to prevent vibration from mic noise
-        audioLevel = audioLevel * 0.6 + clamped * 0.4
+        let smoothed = model.audioLevel * 0.6 + clamped * 0.4
         let now = CFAbsoluteTimeGetCurrent()
         guard now - lastAudioViewUpdate >= 0.04 else { return }
         lastAudioViewUpdate = now
-        updateView()
+        model.audioLevel = smoothed
     }
 
     func hide() {
         releaseDismissed = false
-        currentState = .hidden
-        audioLevel = 0
-        partialText = ""
-        targetAppIcon = nil
+        model.state = .hidden
+        model.audioLevel = 0
+        model.partialText = ""
+        model.targetAppIcon = nil
         placementScreen = nil
         panel?.orderOut(nil)
         removeEscapeMonitors()
     }
 
     private var panelSize: CGSize {
-        switch displayMode {
+        switch model.displayMode {
         case .minimal:
             return CGSize(width: 140, height: 56)
         case .full:
@@ -143,8 +148,12 @@ final class RecordingHUDController: NSObject {
 
     private func ensurePanel() {
         guard panel == nil else { return }
-        updateHostingView()
-        guard let hosting = hostingView else { return }
+        let hosting = NSHostingView(
+            rootView: RecordingHUDView(model: model) {
+                AppState.shared.cancelDictation()
+            }
+        )
+        self.hostingView = hosting
 
         let size = panelSize
         let panel = HUDPanel(
@@ -166,39 +175,7 @@ final class RecordingHUDController: NSObject {
 
     /// Full HUD accepts clicks (non-activating panel); minimal pill is click-through.
     private func applyMouseHandling(to panel: NSPanel) {
-        panel.ignoresMouseEvents = displayMode != .full
-    }
-
-    private func updateView() {
-        if hostingView == nil {
-            ensurePanel()
-        } else {
-            resizePanel()
-            updateHostingView()
-        }
-    }
-
-    private func updateHostingView() {
-        let view = RecordingHUDView(
-            state: currentState,
-            partialText: partialText,
-            hotkeyLabel: hotkeyLabel,
-            displayMode: displayMode,
-            audioLevel: audioLevel,
-            targetAppIcon: targetAppIcon,
-            onDismiss: {
-                AppState.shared.cancelDictation()
-            }
-        )
-        if let hostingView {
-            hostingView.rootView = view
-        } else {
-            hostingView = NSHostingView(rootView: view)
-        }
-    }
-
-    private func positionBottomCenter() {
-        resizePanel()
+        panel.ignoresMouseEvents = model.displayMode != .full
     }
 
     private func installEscapeMonitors() {
@@ -239,13 +216,19 @@ final class RecordingHUDController: NSObject {
 
 
 struct RecordingHUDView: View {
-    let state: HUDState
-    let partialText: String
-    let hotkeyLabel: String
-    let displayMode: HUDDisplayMode
-    let audioLevel: Float
-    let targetAppIcon: NSImage?
+    @ObservedObject var model: RecordingHUDModel
     let onDismiss: () -> Void
+
+    private var state: HUDState { model.state }
+    private var partialText: String { model.partialText }
+    private var hotkeyLabel: String { model.hotkeyLabel }
+    private var displayMode: HUDDisplayMode { model.displayMode }
+    private var audioLevel: Float { model.audioLevel }
+    private var targetAppIcon: NSImage? { model.targetAppIcon }
+
+    private var isProcessing: Bool {
+        state == .transcribing || state == .polishing || state == .injecting
+    }
 
     var body: some View {
         Group {
@@ -288,7 +271,7 @@ struct RecordingHUDView: View {
                     .foregroundStyle(DesignTokens.dangerFg)
                     .frame(width: 51, height: 20)
             } else {
-                WaveformGauge(level: audioLevel, color: markColor)
+                WaveformGauge(level: audioLevel, color: markColor, isProcessing: isProcessing)
             }
         }
         .padding(.horizontal, 12)
@@ -426,31 +409,53 @@ struct RecordingHUDView: View {
     }
 }
 
-/// Live waveform gauge — symmetric bar wave that swells with mic level.
+/// Live waveform gauge — symmetric bar wave that swells with mic level,
+/// or glides in a smooth traveling shimmer while transcribing/polishing.
 struct WaveformGauge: View {
     let level: Float
     let color: Color
+    var isProcessing: Bool = false
 
     private let barCount = 9
 
     var body: some View {
+        Group {
+            if isProcessing && !DesignTokens.reduceMotion {
+                TimelineView(.animation(minimumInterval: 0.05)) { timeline in
+                    let phase = timeline.date.timeIntervalSinceReferenceDate * 6.0
+                    barsView(processingPhase: phase)
+                }
+            } else {
+                barsView(processingPhase: nil)
+                    .animation(DesignTokens.reduceMotion ? nil : .linear(duration: 0.08), value: level)
+            }
+        }
+        .padding(.horizontal, 10)
+    }
+
+    private func barsView(processingPhase: Double?) -> some View {
         HStack(alignment: .center, spacing: 3) {
             ForEach(0..<barCount, id: \.self) { index in
                 Capsule()
                     .fill(color)
-                    .frame(width: 3, height: barHeight(index))
+                    .frame(width: 3, height: barHeight(index, processingPhase: processingPhase))
             }
         }
-        .padding(.horizontal, 10)
-        .animation(DesignTokens.reduceMotion ? nil : .linear(duration: 0.08), value: level)
     }
 
-    private func barHeight(_ index: Int) -> CGFloat {
-        // Noise gate: treat ambient mic hiss as silence
-        let gated = level < 0.05 ? 0.0 : Double(level)
+    private func barHeight(_ index: Int, processingPhase: Double?) -> CGFloat {
         let centerDistance = abs(Double(index) - Double(barCount - 1) / 2)
             / (Double(barCount - 1) / 2)   // 0 center … 1 edge
         let silhouette = 1.0 - centerDistance * 0.55
+
+        if let phase = processingPhase {
+            let wave = (sin(phase - Double(index) * 0.65) + 1.0) * 0.5
+            let shaped = wave * 0.55 + 0.25
+            return max(4, 22 * silhouette * shaped)
+        }
+
+        // Noise gate: treat ambient mic hiss as silence
+        let gated = level < 0.05 ? 0.0 : Double(level)
         let shaped = gated * 0.75 + 0.25
         return max(4, 24 * silhouette * shaped)
     }

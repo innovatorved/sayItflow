@@ -3,6 +3,7 @@ import KeyboardShortcuts
 
 enum MainWindowSection: String, CaseIterable, Identifiable, Hashable {
     case status
+    case history
     case dictation
     case text
     case permissions
@@ -13,6 +14,7 @@ enum MainWindowSection: String, CaseIterable, Identifiable, Hashable {
     var title: String {
         switch self {
         case .status: "Status"
+        case .history: "History"
         case .dictation: "Dictation"
         case .text: "Audio & System"
         case .permissions: "Permissions"
@@ -23,6 +25,7 @@ enum MainWindowSection: String, CaseIterable, Identifiable, Hashable {
     var symbol: String {
         switch self {
         case .status: "waveform.circle"
+        case .history: "clock.arrow.circlepath"
         case .dictation: "mic"
         case .text: "gearshape"
         case .permissions: "lock.shield"
@@ -42,10 +45,6 @@ struct DashboardView: View {
     @State private var demoText = ""
     @State private var hint = ""
     @State private var fixingKind: PermissionKind?
-    @State private var testInjectionText: String = "Hello from SayItFlow!"
-    @State private var testInjectionResult: String = ""
-    @State private var testInjectionCountdown: Int = 0
-    @State private var isTestingInjection: Bool = false
 
     var initialSection: MainWindowSection?
 
@@ -104,6 +103,11 @@ struct DashboardView: View {
             appState.refreshPermissionStatuses()
             vozEngine.refreshStatus()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .sayItFlowSelectSection)) { notification in
+            if let target = notification.object as? MainWindowSection {
+                selection = target
+            }
+        }
     }
 
     private var headerView: some View {
@@ -134,8 +138,9 @@ struct DashboardView: View {
     private func subtitleForSection(_ section: MainWindowSection) -> String {
         switch section {
         case .status: "System health, speech recognition engine, and quick test."
+        case .history: "Every dictation automatically saved locally with exact timestamps."
         case .dictation: "Hotkey trigger and language settings for Voz speech recognition."
-        case .text: "Output formatting, auto-capitalization, and text polish."
+        case .text: "Output formatting, custom vocabulary, and system preferences."
         case .permissions: "System accessibility and audio input access control."
         case .about: "SayItFlow version information and open-source models."
         }
@@ -146,6 +151,8 @@ struct DashboardView: View {
         switch selection {
         case .status:
             statusDetail
+        case .history:
+            TranscriptHistoryView()
         case .dictation:
             dictationSettings
         case .text:
@@ -209,11 +216,11 @@ struct DashboardView: View {
 
                 Divider().overlay(DesignTokens.borderSubtle)
 
-                // Row 2: S1-mini Normalizer
+                // Row 2: Embedded In-Process Normalizer (Emberon-2 or S1-mini)
                 HStack(alignment: .center, spacing: 12) {
                     VStack(alignment: .leading, spacing: 3) {
                         HStack(spacing: 6) {
-                            Text("S1-mini")
+                            Text(s1Mini.selectedModel.shortName)
                                 .font(.system(size: 12, weight: .semibold))
                                 .foregroundStyle(DesignTokens.textPrimary)
                                 .lineLimit(1)
@@ -224,7 +231,7 @@ struct DashboardView: View {
                                 .padding(.vertical, 1)
                                 .background(DesignTokens.borderSubtle.opacity(0.5), in: RoundedRectangle(cornerRadius: 3))
                         }
-                        Text("Superwhisper · Qwen3 0.6B · 462 MB · Metal GPU")
+                        Text(s1Mini.selectedModel.subtitle)
                             .font(.system(size: 10))
                             .foregroundStyle(DesignTokens.textSecondary)
                     }
@@ -235,7 +242,7 @@ struct DashboardView: View {
                     } else if s1Mini.isDownloaded {
                         StatusBadge(kind: .granted, text: "Ready")
                     } else {
-                        Button("Download (462 MB)") {
+                        Button("Download (\(s1Mini.selectedModel.sizeMB) MB)") {
                             Task { try? await s1Mini.downloadModel() }
                         }
                         .buttonStyle(MonochromePrimaryButtonStyle(isCompact: true))
@@ -244,7 +251,7 @@ struct DashboardView: View {
 
                 Divider().overlay(DesignTokens.borderSubtle)
 
-                Text("Desert Ant Voz (DAL Source-Available 1.0) · S1-mini by Superwhisper (Apache 2.0). All processing is 100% on-device.")
+                Text("Desert Ant Voz · Emberon-2 by Promethic Labs · S1-mini by Superwhisper. Runs 100% in-process — no external apps required.")
                     .font(.system(size: 10))
                     .foregroundStyle(DesignTokens.textMuted)
             }
@@ -360,20 +367,20 @@ struct DashboardView: View {
 
     private var textSettings: some View {
         VStack(spacing: 16) {
-            // S1-mini Post-Processing Card
+            // Text Normalization Card (Embedded In-Process llama.cpp)
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .center) {
                     VStack(alignment: .leading, spacing: 3) {
                         HStack(spacing: 6) {
-                            Text("S1-mini Normalization")
+                            Text("AI Text Cleanup")
                                 .font(.system(size: 14, weight: .semibold))
                                 .tracking(-0.02)
                                 .foregroundStyle(DesignTokens.textPrimary)
-                            Text("by Superwhisper")
+                            Text("Built-in Metal")
                                 .font(.system(size: 11, weight: .medium))
                                 .foregroundStyle(DesignTokens.textMuted)
                         }
-                        Text("On-device causal LM that cleans fillers (um, uh, like), corrects punctuation, numbers, and formats text.")
+                        Text("Runs directly inside SayItFlow (no external apps) to clean fillers, stutters, punctuation, and self-corrections.")
                             .font(.system(size: 11))
                             .foregroundStyle(DesignTokens.textSecondary)
                     }
@@ -385,45 +392,60 @@ struct DashboardView: View {
                 if s1Mini.isEnabled {
                     Divider().overlay(DesignTokens.borderSubtle)
 
-                    // Control Axes: Styling, Structure, Context
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack {
-                            Text("Styling")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(DesignTokens.textSecondary)
-                                .frame(width: 80, alignment: .leading)
-                            Picker("", selection: $s1Mini.styling) {
-                                ForEach(S1Styling.allCases) { style in
-                                    Text(style.displayName).tag(style)
-                                }
+                    HStack {
+                        Text("Model")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(DesignTokens.textSecondary)
+                            .frame(width: 80, alignment: .leading)
+                        Picker("", selection: $s1Mini.selectedModel) {
+                            ForEach(NormalizerModel.allCases) { model in
+                                Text("\(model.displayName) · \(model.sizeMB) MB").tag(model)
                             }
-                            .pickerStyle(.segmented)
                         }
+                        .pickerStyle(.segmented)
+                    }
 
-                        HStack {
-                            Text("Structure")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(DesignTokens.textSecondary)
-                                .frame(width: 80, alignment: .leading)
-                            Picker("", selection: $s1Mini.structure) {
-                                ForEach(S1Structure.allCases) { structure in
-                                    Text(structure.displayName).tag(structure)
+                    if s1Mini.selectedModel == .s1Mini {
+                        // Control Axes: Styling, Structure, Context (S1-mini only)
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack {
+                                Text("Styling")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundStyle(DesignTokens.textSecondary)
+                                    .frame(width: 80, alignment: .leading)
+                                Picker("", selection: $s1Mini.styling) {
+                                    ForEach(S1Styling.allCases) { style in
+                                        Text(style.displayName).tag(style)
+                                    }
                                 }
+                                .pickerStyle(.segmented)
                             }
-                            .pickerStyle(.segmented)
-                        }
 
-                        HStack {
-                            Text("Context")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(DesignTokens.textSecondary)
-                                .frame(width: 80, alignment: .leading)
-                            Picker("", selection: $s1Mini.context) {
-                                ForEach(S1Context.allCases) { ctx in
-                                    Text(ctx.displayName).tag(ctx)
+                            HStack {
+                                Text("Structure")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundStyle(DesignTokens.textSecondary)
+                                    .frame(width: 80, alignment: .leading)
+                                Picker("", selection: $s1Mini.structure) {
+                                    ForEach(S1Structure.allCases) { structure in
+                                        Text(structure.displayName).tag(structure)
+                                    }
                                 }
+                                .pickerStyle(.segmented)
                             }
-                            .pickerStyle(.segmented)
+
+                            HStack {
+                                Text("Context")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundStyle(DesignTokens.textSecondary)
+                                    .frame(width: 80, alignment: .leading)
+                                Picker("", selection: $s1Mini.context) {
+                                    ForEach(S1Context.allCases) { ctx in
+                                        Text(ctx.displayName).tag(ctx)
+                                    }
+                                }
+                                .pickerStyle(.segmented)
+                            }
                         }
                     }
 
@@ -433,7 +455,7 @@ struct DashboardView: View {
                     HStack(alignment: .center) {
                         VStack(alignment: .leading, spacing: 3) {
                             HStack(spacing: 6) {
-                                Text("Model Weights (462 MB)")
+                                Text("\(s1Mini.selectedModel.shortName) Weights (\(s1Mini.selectedModel.sizeMB) MB)")
                                     .font(.system(size: 12, weight: .medium))
                                     .foregroundStyle(DesignTokens.textPrimary)
                                 if s1Mini.isDownloaded {
@@ -459,7 +481,7 @@ struct DashboardView: View {
                                         .foregroundStyle(DesignTokens.textMuted)
                                 }
                             }
-                            Text(s1Mini.isDownloaded ? "Running on-device with zero cloud calls." : "When not downloaded, high-speed built-in rules normalize your text.")
+                            Text(s1Mini.isDownloaded ? "Runs natively in-process on Metal GPU — zero external apps." : "When not downloaded, instant built-in Swift rules clean your text.")
                                 .font(.system(size: 11))
                                 .foregroundStyle(DesignTokens.textMuted)
                         }
@@ -469,7 +491,7 @@ struct DashboardView: View {
                             ProgressView(value: s1Mini.downloadProgress)
                                 .frame(width: 100)
                         } else if !s1Mini.isDownloaded {
-                            Button("Download S1-mini") {
+                            Button("Download \(s1Mini.selectedModel.shortName)") {
                                 Task {
                                     try? await s1Mini.downloadModel()
                                 }
@@ -495,12 +517,36 @@ struct DashboardView: View {
                         Image(systemName: "info.circle")
                             .font(.system(size: 12))
                             .foregroundStyle(DesignTokens.textMuted)
-                        Text("S1-mini is fine-tuned for English. For the other 24 languages supported by Voz, transcripts are passed directly without modification.")
+                        Text("AI cleanup is fine-tuned for English. For the other 24 languages supported by Voz, transcripts are passed directly without modification.")
                             .font(.system(size: 11))
                             .foregroundStyle(DesignTokens.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
+            }
+            .monochromeCard()
+
+            // Custom Vocabulary Card
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Custom Vocabulary")
+                    .font(.system(size: 14, weight: .semibold))
+                    .tracking(-0.02)
+                    .foregroundStyle(DesignTokens.textPrimary)
+
+                Text("Comma-separated names, acronyms, or technical terms to preserve exact spelling and casing.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(DesignTokens.textSecondary)
+
+                TextField("e.g. SayItFlow, SwiftUI, Xcode, PostgreSQL", text: $settings.vocabularyText)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 12))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .background(DesignTokens.surfaceSubtle, in: RoundedRectangle(cornerRadius: DesignTokens.radiusMd))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DesignTokens.radiusMd)
+                            .stroke(DesignTokens.borderSubtle, lineWidth: 1)
+                    )
             }
             .monochromeCard()
 
@@ -570,7 +616,7 @@ struct DashboardView: View {
                 Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 6) {
                     GridRow {
                         Text("Version").font(.system(size: 12)).foregroundStyle(DesignTokens.textSecondary)
-                        Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.6.0")
+                        Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.7.0")
                             .font(.system(size: 12, design: .monospaced))
                             .foregroundStyle(DesignTokens.textPrimary)
                     }
@@ -579,8 +625,8 @@ struct DashboardView: View {
                         Text("Desert Ant Voz (Apple Neural Engine)").font(.system(size: 12)).foregroundStyle(DesignTokens.textPrimary)
                     }
                     GridRow {
-                        Text("Text Normalizer").font(.system(size: 12)).foregroundStyle(DesignTokens.textSecondary)
-                        Text("\"S1-mini\" by \"Superwhisper\"").font(.system(size: 12)).foregroundStyle(DesignTokens.textPrimary)
+                        Text("Text Normalizers").font(.system(size: 12)).foregroundStyle(DesignTokens.textSecondary)
+                        Text("Emberon-2 (Promethic Labs / LFM2.5-350M) & \"S1-mini\" by \"Superwhisper\"").font(.system(size: 12)).foregroundStyle(DesignTokens.textPrimary)
                     }
                     GridRow {
                         Text("Design System").font(.system(size: 12)).foregroundStyle(DesignTokens.textSecondary)
