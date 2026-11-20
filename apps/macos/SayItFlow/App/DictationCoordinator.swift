@@ -369,6 +369,7 @@ final class DictationCoordinator {
     private func startLevelMonitor(generation: UInt64) {
         levelTask?.cancel()
         levelTask = Task { [weak self, audioInput] in
+            guard !Task.isCancelled else { return }
             do {
                 try await audioInput.beginStreaming()
             } catch {
@@ -383,6 +384,10 @@ final class DictationCoordinator {
                         displayMode: .full
                     )
                 }
+                return
+            }
+            if Task.isCancelled {
+                audioInput.stop()
                 return
             }
             while !Task.isCancelled {

@@ -1,6 +1,7 @@
 import Accelerate
 @preconcurrency import AVFoundation
 import CoreAudio
+import CoreMedia
 import Foundation
 import os
 
@@ -24,79 +25,147 @@ struct SendablePCMBuffer: @unchecked Sendable {
     let buffer: AVAudioPCMBuffer
 }
 
-/// Push-to-talk capture. Tap persists across holds; engine start/stop per session.
+/// Input-only push-to-talk audio capture backed by `AVCaptureSession`.
+///
+/// Uses `AVCaptureSession` + `AVCaptureAudioDataOutput` instead of `AVAudioEngine`
+/// because `AVAudioEngine` creates a full-duplex `CADefaultDeviceAggregate` that opens
+/// the default output speaker (and keeps it running even after `engine.stop()` / `reset()`),
+/// causing macOS audio ducking and Bluetooth HFP volume drops on built-in and external speakers.
+///
+/// The capture session is created on `beginStreaming()` and completely torn down and released
+/// on `stop()`, so zero audio hardware is held open while idle.
 final class AudioInput: @unchecked Sendable {
     private enum CapturePhase { case idle, streaming }
 
     private struct State: @unchecked Sendable {
         var continuation: AsyncStream<SendablePCMBuffer>.Continuation?
         var phase: CapturePhase = .idle
-        var tapInstalled = false
         var ringBuffers: [SendablePCMBuffer] = []
         var latestPeakLevel: Float = 0
     }
 
-    /// Rebuilt when the input device cache is stale. Mutated only on operationQueue.
-    private var engine = AVAudioEngine()
+    private final class CaptureSampleDelegate: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate, @unchecked Sendable {
+        weak var owner: AudioInput?
+
+        func captureOutput(
+            _ output: AVCaptureOutput,
+            didOutput sampleBuffer: CMSampleBuffer,
+            from connection: AVCaptureConnection
+        ) {
+            owner?.handleSampleBuffer(sampleBuffer)
+        }
+    }
+
     private let lock = OSAllocatedUnfairLock(initialState: State())
     private let operationQueue = DispatchQueue(label: "com.innovatorved.sayitflow.audio.ops")
+    private let sampleQueue = DispatchQueue(label: "com.innovatorved.sayitflow.audio.samples", qos: .userInteractive)
+    private let sampleDelegate = CaptureSampleDelegate()
+    private let notificationToken = NSObject()
+
+    /// All capture-session state is mutated exclusively on `operationQueue`.
+    private var captureSession: AVCaptureSession?
+    private var captureOutput: AVCaptureAudioDataOutput?
+    private var captureDevice: AVCaptureDevice?
+    private var sessionErrorObserver: NSObjectProtocol?
+    private var deviceDisconnectObserver: NSObjectProtocol?
+    private var configObserver: NSObjectProtocol?
+    private var halListenerBlock: AudioObjectPropertyListenerBlock?
+
     private var isMutating = false
     private var isTearingDown = false
     private var pendingGraceRecovery: DispatchWorkItem?
     private var lastEngineStartTime: CFAbsoluteTime = 0
     private var lastInputDeviceID: AudioDeviceID?
-    /// Tap format at install time; reusing after a route change yields -10868.
-    private var installedTapFormat: AVAudioFormat?
+
     private static let configChangeGracePeriod: CFTimeInterval = 1.5
     private static let graceRecoveryDelay: TimeInterval = 0.25
-    /// HAL can report a zero format briefly after a device swap (~1.5s at 50ms polls).
-    private static let settlePollAttempts = 30
-    private static let tapInstallAttempts = 3
+    /// HAL can briefly report no capture device right after a hardware/Bluetooth swap.
+    private static let deviceSettleAttempts = 15
     private let ringCapacity = 8
-    private var configObserver: NSObjectProtocol?
 
-    internal var configurationChangeNotificationObject: AVAudioEngine { engine }
+    internal var configurationChangeNotificationObject: AnyObject { notificationToken }
 
     #if DEBUG
-    /// Exercises the stale-input-device recovery path without needing to revoke TCC.
+    /// Exercises the dead-session recovery path without needing to revoke TCC.
     internal func rebuildEngineForTesting() {
-        operationQueue.sync { rebuildEngineOnQueue() }
+        operationQueue.sync { teardownSessionOnQueue() }
     }
 
     internal var isCapturingForTesting: Bool {
         operationQueue.sync {
-            lock.withLock { $0.phase == .streaming } && (engine.isRunning || pendingGraceRecovery != nil)
+            let streaming = lock.withLock { $0.phase == .streaming }
+            return streaming && (captureSession?.isRunning == true || pendingGraceRecovery != nil)
         }
     }
     #endif
+
     var onConfigurationChange: (@Sendable () -> Void)?
     /// Sample rate may change; downstream recognition must restart.
     var onInputDeviceChanged: (@Sendable () -> Void)?
-    /// Direct zero-copy buffer callback invoked synchronously on the audio tap thread while streaming.
+    /// Direct zero-copy buffer callback invoked synchronously on the audio sample queue while streaming.
     /// Guarantees every captured sample up to `stop()` is delivered with zero AsyncStream scheduling lag.
     var onBuffer: (@Sendable (AVAudioPCMBuffer) -> Void)?
 
     var peakLevel: Float { lock.withLock { $0.latestPeakLevel } }
 
     init() {
+        sampleDelegate.owner = self
         installConfigObserver()
+        installDefaultInputDeviceListener()
+    }
+
+    deinit {
+        removeDefaultInputDeviceListener()
+        if let configObserver {
+            NotificationCenter.default.removeObserver(configObserver)
+        }
+        operationQueue.sync { hardResetOnQueue() }
     }
 
     private func installConfigObserver() {
         configObserver = NotificationCenter.default.addObserver(
             forName: .AVAudioEngineConfigurationChange,
-            object: engine,
+            object: notificationToken,
             queue: nil
         ) { [weak self] _ in
             self?.handleConfigurationChange()
         }
     }
 
-    deinit {
-        operationQueue.sync { hardResetOnQueue() }
-        if let configObserver {
-            NotificationCenter.default.removeObserver(configObserver)
+    private func installDefaultInputDeviceListener() {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultInputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        let block: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
+            self?.handleConfigurationChange()
         }
+        let status = AudioObjectAddPropertyListenerBlock(
+            AudioObjectID(kAudioObjectSystemObject),
+            &address,
+            operationQueue,
+            block
+        )
+        if status == noErr {
+            halListenerBlock = block
+        }
+    }
+
+    private func removeDefaultInputDeviceListener() {
+        guard let block = halListenerBlock else { return }
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultInputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        AudioObjectRemovePropertyListenerBlock(
+            AudioObjectID(kAudioObjectSystemObject),
+            &address,
+            operationQueue,
+            block
+        )
+        halListenerBlock = nil
     }
 
     var bufferStream: AsyncStream<SendablePCMBuffer> {
@@ -139,20 +208,19 @@ final class AudioInput: @unchecked Sendable {
         isMutating = true
         defer { isMutating = false }
 
-        if lock.withLock({ $0.phase == .streaming }), engine.isRunning {
+        if lock.withLock({ $0.phase == .streaming }), captureSession?.isRunning == true {
             logPhase("beginStreaming skipped — already streaming")
             return
         }
 
-        if lock.withLock({ $0.phase == .streaming }), !engine.isRunning {
-            logPhase("beginStreaming — recovering dead engine")
-            try recoverEngineOnQueue()
+        if lock.withLock({ $0.phase == .streaming }), captureSession?.isRunning != true {
+            logPhase("beginStreaming — recovering dead session")
+            try startFreshSessionOnQueue()
             activateStreamingPhaseOnQueue()
             return
         }
 
-        try ensureTapInstalledOnQueue()
-        try startEngineOnQueue()
+        try startFreshSessionOnQueue()
         activateStreamingPhaseOnQueue()
     }
 
@@ -175,12 +243,122 @@ final class AudioInput: @unchecked Sendable {
         }
     }
 
-    private func removeTapOnQueue() {
-        if lock.withLock({ $0.tapInstalled }) {
-            SIFRemoveTapSafely(engine.inputNode, 0)
-            lock.withLock { $0.tapInstalled = false }
+    private func startFreshSessionOnQueue() throws {
+        guard AVCaptureDevice.authorizationStatus(for: .audio) == .authorized else {
+            throw AudioInputError.microphonePermissionMissing
         }
-        installedTapFormat = nil
+
+        teardownSessionOnQueue()
+
+        let device = try resolveInputDeviceOnQueue()
+        let session = AVCaptureSession()
+        session.beginConfiguration()
+
+        let deviceInput: AVCaptureDeviceInput
+        do {
+            deviceInput = try AVCaptureDeviceInput(device: device)
+        } catch {
+            session.commitConfiguration()
+            throw AudioInputError.engineStartFailed("Could not open microphone: \(error.localizedDescription)")
+        }
+
+        guard session.canAddInput(deviceInput) else {
+            session.commitConfiguration()
+            throw AudioInputError.engineStartFailed("Cannot attach audio input device")
+        }
+        session.addInput(deviceInput)
+
+        let dataOutput = AVCaptureAudioDataOutput()
+        dataOutput.audioSettings = [
+            AVFormatIDKey: kAudioFormatLinearPCM,
+            AVLinearPCMBitDepthKey: 32,
+            AVLinearPCMIsFloatKey: true,
+            AVLinearPCMIsBigEndianKey: false,
+            AVLinearPCMIsNonInterleaved: true,
+            AVNumberOfChannelsKey: 1,
+        ]
+        dataOutput.setSampleBufferDelegate(sampleDelegate, queue: sampleQueue)
+
+        guard session.canAddOutput(dataOutput) else {
+            session.commitConfiguration()
+            throw AudioInputError.engineStartFailed("Cannot attach audio data output")
+        }
+        session.addOutput(dataOutput)
+        session.commitConfiguration()
+
+        installSessionObserversOnQueue(session: session, device: device)
+
+        captureSession = session
+        captureOutput = dataOutput
+        captureDevice = device
+
+        session.startRunning()
+        guard session.isRunning else {
+            teardownSessionOnQueue()
+            throw AudioInputError.engineStartFailed("Audio capture session failed to start")
+        }
+        noteSessionStartedOnQueue()
+    }
+
+    private func resolveInputDeviceOnQueue() throws -> AVCaptureDevice {
+        for attempt in 0..<Self.deviceSettleAttempts {
+            if Self.defaultInputDeviceID() != nil,
+               let device = AVCaptureDevice.default(for: .audio),
+               device.isConnected {
+                return device
+            }
+            if attempt + 1 < Self.deviceSettleAttempts {
+                Thread.sleep(forTimeInterval: 0.05)
+            }
+        }
+        logPhase("no default input device")
+        throw AudioInputError.noInputDevice
+    }
+
+    private func installSessionObserversOnQueue(session: AVCaptureSession, device: AVCaptureDevice) {
+        removeSessionObserversOnQueue()
+        sessionErrorObserver = NotificationCenter.default.addObserver(
+            forName: AVCaptureSession.runtimeErrorNotification,
+            object: session,
+            queue: nil
+        ) { [weak self] _ in
+            self?.handleConfigurationChange()
+        }
+        deviceDisconnectObserver = NotificationCenter.default.addObserver(
+            forName: AVCaptureDevice.wasDisconnectedNotification,
+            object: device,
+            queue: nil
+        ) { [weak self] _ in
+            self?.handleConfigurationChange()
+        }
+    }
+
+    private func removeSessionObserversOnQueue() {
+        if let sessionErrorObserver {
+            NotificationCenter.default.removeObserver(sessionErrorObserver)
+            self.sessionErrorObserver = nil
+        }
+        if let deviceDisconnectObserver {
+            NotificationCenter.default.removeObserver(deviceDisconnectObserver)
+            self.deviceDisconnectObserver = nil
+        }
+    }
+
+    private func teardownSessionOnQueue() {
+        removeSessionObserversOnQueue()
+        captureOutput?.setSampleBufferDelegate(nil, queue: nil)
+        if let session = captureSession {
+            if session.isRunning {
+                session.stopRunning()
+            }
+            session.beginConfiguration()
+            for input in session.inputs { session.removeInput(input) }
+            for output in session.outputs { session.removeOutput(output) }
+            session.commitConfiguration()
+        }
+        captureSession = nil
+        captureOutput = nil
+        captureDevice = nil
     }
 
     private func cancelPendingGraceRecovery() {
@@ -188,138 +366,22 @@ final class AudioInput: @unchecked Sendable {
         pendingGraceRecovery = nil
     }
 
-    @discardableResult
-    private func tryLightweightEngineRestartOnQueue() -> Bool {
-        guard lock.withLock({ $0.tapInstalled }), !engine.isRunning else {
-            return engine.isRunning
-        }
-        // Format mismatch after route change (including Bluetooth HFP switching inputFormat from 44.1kHz to 16kHz)
-        // — reinstall tap instead of lightweight restart.
-        let hwFormat = engine.inputNode.inputFormat(forBus: 0)
-        let outFormat = engine.inputNode.outputFormat(forBus: 0)
-        if let installedTapFormat,
-           outFormat != installedTapFormat || (isValidFormat(hwFormat) && hwFormat.sampleRate != installedTapFormat.sampleRate) {
-            logPhase("skipping lightweight restart — input format no longer matches tap")
-            return false
-        }
-        engine.prepare()
-        do {
-            try engine.start()
-            noteEngineStartedOnQueue()
-            return true
-        } catch {
-            logPhase("lightweight engine restart failed: \(error.localizedDescription)")
-            return false
-        }
-    }
-
-    private func recoverEngineOnQueue() throws {
-        if tryLightweightEngineRestartOnQueue() { return }
-        removeTapOnQueue()
-        if engine.isRunning { engine.stop() }
-        engine.reset()
-        try ensureTapInstalledOnQueue()
-        engine.prepare()
-        try engine.start()
-        noteEngineStartedOnQueue()
-    }
-
-    private func noteEngineStartedOnQueue() {
+    private func noteSessionStartedOnQueue() {
         lastEngineStartTime = CFAbsoluteTimeGetCurrent()
         lastInputDeviceID = Self.defaultInputDeviceID()
     }
 
-    private func startEngineOnQueue() throws {
-        guard !engine.isRunning else { return }
-        engine.prepare()
-        do {
-            try engine.start()
-            noteEngineStartedOnQueue()
-        } catch {
-            logPhase("engine.start failed — recovering")
-            try recoverEngineOnQueue()
-        }
-    }
-
-    private func pollInputFormatOnQueue(attempts: Int = 20) -> AVAudioFormat? {
-        for attempt in 0..<attempts {
-            let hwFormat = engine.inputNode.inputFormat(forBus: 0)
-            let outFormat = engine.inputNode.outputFormat(forBus: 0)
-            if isValidFormat(hwFormat), isValidFormat(outFormat), hwFormat.sampleRate != outFormat.sampleRate {
-                return hwFormat
-            }
-            if isValidFormat(outFormat) { return outFormat }
-            if isValidFormat(hwFormat) { return hwFormat }
-            if attempt + 1 < attempts { Thread.sleep(forTimeInterval: 0.05) }
-        }
-        return nil
-    }
-
-    private func waitForValidInputFormatOnQueue() throws -> AVAudioFormat {
-        guard Self.defaultInputDeviceID() != nil else {
-            logPhase("no default input device")
-            throw AudioInputError.noInputDevice
-        }
-
-        if let format = pollInputFormatOnQueue() { return format }
-
-        // Stale engine caches a dead input device — rebuild once, then poll longer for HAL settle.
-        logPhase("input format invalid — rebuilding engine once")
-        rebuildEngineOnQueue()
-        if let format = pollInputFormatOnQueue(attempts: Self.settlePollAttempts) { return format }
-        throw AudioInputError.noInputDevice
-    }
-
-    private func rebuildEngineOnQueue() {
-        if engine.isRunning { engine.stop() }
-        SIFRemoveTapSafely(engine.inputNode, 0)
-        lock.withLock { $0.tapInstalled = false }
-        installedTapFormat = nil
-        if let configObserver {
-            NotificationCenter.default.removeObserver(configObserver)
-        }
-        engine = AVAudioEngine()
-        installConfigObserver()
-    }
-
-    private func ensureTapInstalledOnQueue() throws {
-        if lock.withLock({ $0.tapInstalled }) { return }
-
-        guard AVCaptureDevice.authorizationStatus(for: .audio) == .authorized else {
-            throw AudioInputError.microphonePermissionMissing
-        }
-
-        for attempt in 0..<Self.tapInstallAttempts {
-            // Resolve format here — waitForValidInputFormat may replace the engine.
-            let format = try waitForValidInputFormatOnQueue()
-            let input = engine.inputNode
-            SIFRemoveTapSafely(input, 0)
-            if SIFInstallTapSafely(input, 0, 4096, format, { [weak self] buffer, _ in
-                self?.emit(buffer: buffer)
-            }) || SIFInstallTapSafely(input, 0, 4096, nil, { [weak self] buffer, _ in
-                self?.emit(buffer: buffer)
-            }) {
-                installedTapFormat = input.inputFormat(forBus: 0)
-                lock.withLock { $0.tapInstalled = true }
-                logPhase("installTap once")
-                return
-            }
-            logPhase("installTap rejected by engine (attempt \(attempt + 1))")
-            Thread.sleep(forTimeInterval: 0.1)
-        }
-        throw AudioInputError.noInputDevice
-    }
-
-    /// Config-change fires for output route swaps too — only rebuild when the input device changes.
+    /// Route/runtime-change handler. Output-only changes never disrupt input-only capture.
     private func handleConfigurationChange() {
         operationQueue.async { [weak self] in
             guard let self else { return }
             let isStreaming = self.lock.withLock { $0.phase == .streaming }
             let elapsed = CFAbsoluteTimeGetCurrent() - self.lastEngineStartTime
+            let sessionRunning = self.captureSession?.isRunning == true
             let action = AudioRouteChangeLogic.action(
                 deviceChanged: Self.defaultInputDeviceID() != self.lastInputDeviceID,
                 isStreaming: isStreaming,
-                engineRunning: self.engine.isRunning,
+                engineRunning: sessionRunning,
                 withinGracePeriod: self.lastEngineStartTime > 0
                     && elapsed < Self.configChangeGracePeriod
             )
@@ -330,16 +392,18 @@ final class AudioInput: @unchecked Sendable {
                 return
             case .resetIdle:
                 self.cancelPendingGraceRecovery()
-                self.logPhase("config change while idle — reset")
-                self.resetIdleEngineOnQueue()
+                if self.captureSession != nil {
+                    self.logPhase("config change while idle — teardown")
+                    self.teardownSessionOnQueue()
+                }
                 return
             case .waitForGrace:
                 self.scheduleGracePeriodRecoveryOnQueue(elapsed: elapsed)
                 return
             case .restartEngine:
                 self.cancelPendingGraceRecovery()
-                if self.tryLightweightEngineRestartOnQueue() {
-                    self.logPhase("engine restarted after config change — same device")
+                if self.reseatCaptureOnQueue() {
+                    self.logPhase("session restarted after config change — same device")
                     return
                 }
             case .reseat:
@@ -360,20 +424,10 @@ final class AudioInput: @unchecked Sendable {
         }
     }
 
-    private func resetIdleEngineOnQueue() {
-        if engine.isRunning { engine.stop() }
-        engine.reset()
-        removeTapOnQueue()
-    }
-
-    /// Reseat capture on a new default input device; keep phase and stream continuation alive.
+    /// Reseat capture on the current default input device; keep phase and stream continuation alive.
     private func reseatCaptureOnQueue() -> Bool {
-        rebuildEngineOnQueue()
         do {
-            try ensureTapInstalledOnQueue()
-            engine.prepare()
-            try engine.start()
-            noteEngineStartedOnQueue()
+            try startFreshSessionOnQueue()
             return true
         } catch {
             logPhase("reseat failed: \(error.localizedDescription)")
@@ -395,48 +449,41 @@ final class AudioInput: @unchecked Sendable {
 
     private func performGracePeriodRecoveryOnQueue() {
         guard lock.withLock({ $0.phase == .streaming }) else { return }
-        do {
-            try recoverEngineOnQueue()
-            logPhase("engine recovered after config change")
-        } catch {
-            if reseatCaptureOnQueue() {
-                logPhase("capture reseated after grace-period recovery failed")
-                onInputDeviceChanged?()
-                return
-            }
-            let wasStreaming = lock.withLock { $0.phase == .streaming }
-            logPhase("grace-period recovery failed — hard reset")
-            hardResetOnQueue()
-            if wasStreaming { onConfigurationChange?() }
+        if reseatCaptureOnQueue() {
+            logPhase("session recovered after config change")
+            onInputDeviceChanged?()
+            return
         }
+        let wasStreaming = lock.withLock { $0.phase == .streaming }
+        logPhase("grace-period recovery failed — hard reset")
+        hardResetOnQueue()
+        if wasStreaming { onConfigurationChange?() }
     }
 
     private func stopCaptureOnQueue() {
         guard !isTearingDown else { return }
         cancelPendingGraceRecovery()
-        logPhase("stopCapture")
-        if engine.isRunning { engine.stop() }
         lock.withLock { state in
             state.phase = .idle
             state.ringBuffers.removeAll()
             state.latestPeakLevel = 0
         }
+        logPhase("stopCapture")
+        teardownSessionOnQueue()
     }
 
     private func hardResetOnQueue() {
         cancelPendingGraceRecovery()
         isTearingDown = true
         defer { isTearingDown = false }
-        logPhase("hardReset")
-        finishContinuationOnQueue()
-        removeTapOnQueue()
-        if engine.isRunning { engine.stop() }
-        engine.reset()
         lock.withLock { state in
             state.phase = .idle
             state.ringBuffers.removeAll()
             state.latestPeakLevel = 0
         }
+        logPhase("hardReset")
+        finishContinuationOnQueue()
+        teardownSessionOnQueue()
     }
 
     private func finishContinuationOnQueue() {
@@ -449,10 +496,117 @@ final class AudioInput: @unchecked Sendable {
     }
 
     private func logPhase(_ message: String) {
+        let running = captureSession?.isRunning == true
+        let hasSession = captureSession != nil
         let snapshot = lock.withLock { state -> String in
-            "phase=\(state.phase) tapInstalled=\(state.tapInstalled) engineRunning=\(engine.isRunning)"
+            "phase=\(state.phase) sessionActive=\(hasSession) running=\(running)"
         }
         SessionTrace.log("\(message) (\(snapshot))", category: "audio")
+    }
+
+    private func handleSampleBuffer(_ sampleBuffer: CMSampleBuffer) {
+        let isStreaming = lock.withLock { $0.phase == .streaming }
+        guard isStreaming else { return }
+        guard let pcmBuffer = makePCMBuffer(from: sampleBuffer) else { return }
+        emit(buffer: pcmBuffer)
+    }
+
+    private func makePCMBuffer(from sampleBuffer: CMSampleBuffer) -> AVAudioPCMBuffer? {
+        guard CMSampleBufferIsValid(sampleBuffer),
+              CMSampleBufferDataIsReady(sampleBuffer),
+              let formatDesc = CMSampleBufferGetFormatDescription(sampleBuffer),
+              let asbdPtr = CMAudioFormatDescriptionGetStreamBasicDescription(formatDesc) else {
+            return nil
+        }
+
+        let asbd = asbdPtr.pointee
+        let frameCount = CMSampleBufferGetNumSamples(sampleBuffer)
+        guard frameCount > 0, asbd.mSampleRate > 0 else { return nil }
+
+        guard let format = AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: asbd.mSampleRate,
+            channels: 1,
+            interleaved: false
+        ), let pcmBuffer = AVAudioPCMBuffer(
+            pcmFormat: format,
+            frameCapacity: AVAudioFrameCount(frameCount)
+        ) else {
+            return nil
+        }
+        pcmBuffer.frameLength = AVAudioFrameCount(frameCount)
+        guard let dst = pcmBuffer.floatChannelData?[0] else { return nil }
+
+        var blockBuffer: CMBlockBuffer?
+        var neededSize = 0
+        let probeStatus = CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer(
+            sampleBuffer,
+            bufferListSizeNeededOut: &neededSize,
+            bufferListOut: nil,
+            bufferListSize: 0,
+            blockBufferAllocator: kCFAllocatorDefault,
+            blockBufferMemoryAllocator: kCFAllocatorDefault,
+            flags: 0,
+            blockBufferOut: nil
+        )
+        guard probeStatus == noErr, neededSize > 0 else { return nil }
+
+        let rawList = UnsafeMutableRawPointer.allocate(
+            byteCount: neededSize,
+            alignment: MemoryLayout<AudioBufferList>.alignment
+        )
+        defer { rawList.deallocate() }
+        let audioBufferListPtr = rawList.bindMemory(to: AudioBufferList.self, capacity: 1)
+
+        let status = CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer(
+            sampleBuffer,
+            bufferListSizeNeededOut: nil,
+            bufferListOut: audioBufferListPtr,
+            bufferListSize: neededSize,
+            blockBufferAllocator: kCFAllocatorDefault,
+            blockBufferMemoryAllocator: kCFAllocatorDefault,
+            flags: kCMSampleBufferFlag_AudioBufferList_Assure16ByteAlignment,
+            blockBufferOut: &blockBuffer
+        )
+        guard status == noErr else { return nil }
+
+        let buffers = UnsafeMutableAudioBufferListPointer(audioBufferListPtr)
+        guard let firstBuffer = buffers.first, let srcData = firstBuffer.mData else { return nil }
+
+        let isFloat32 = (asbd.mFormatFlags & kAudioFormatFlagIsFloat) != 0 && asbd.mBitsPerChannel == 32
+        let isNonInterleaved = (asbd.mFormatFlags & kAudioFormatFlagIsNonInterleaved) != 0
+        let channels = max(1, Int(asbd.mChannelsPerFrame))
+
+        if isFloat32 {
+            if isNonInterleaved || channels == 1 {
+                let byteCount = min(Int(firstBuffer.mDataByteSize), frameCount * MemoryLayout<Float>.size)
+                memcpy(dst, srcData, byteCount)
+                return pcmBuffer
+            } else {
+                let src = srcData.assumingMemoryBound(to: Float.self)
+                let availableFrames = min(frameCount, Int(firstBuffer.mDataByteSize) / (MemoryLayout<Float>.size * channels))
+                for i in 0..<availableFrames {
+                    dst[i] = src[i * channels]
+                }
+                pcmBuffer.frameLength = AVAudioFrameCount(availableFrames)
+                return pcmBuffer
+            }
+        }
+
+        let isInt16 = (asbd.mFormatFlags & kAudioFormatFlagIsSignedInteger) != 0 && asbd.mBitsPerChannel == 16
+        if isInt16 {
+            let stride = isNonInterleaved ? 1 : channels
+            let src = srcData.assumingMemoryBound(to: Int16.self)
+            let availableFrames = min(frameCount, Int(firstBuffer.mDataByteSize) / (MemoryLayout<Int16>.size * stride))
+            let scale: Float = 1.0 / 32768.0
+            for i in 0..<availableFrames {
+                dst[i] = Float(src[i * stride]) * scale
+            }
+            pcmBuffer.frameLength = AVAudioFrameCount(availableFrames)
+            return pcmBuffer
+        }
+
+        return nil
     }
 
     private func emit(buffer: AVAudioPCMBuffer) {
@@ -493,12 +647,21 @@ final class AudioInput: @unchecked Sendable {
         if let continuation = action.0, action.1 { continuation.yield(wrapped) }
     }
 
-    /// Query HAL for default input device — AVAudioEngine caches its own and lies after route changes.
-    private static func defaultInputDeviceID() -> AudioDeviceID? {
+    /// Query HAL for default input device.
+    internal static func defaultInputDeviceID() -> AudioDeviceID? {
+        defaultAudioDeviceID(selector: kAudioHardwarePropertyDefaultInputDevice)
+    }
+
+    /// Query HAL for default output device.
+    internal static func defaultOutputDeviceID() -> AudioDeviceID? {
+        defaultAudioDeviceID(selector: kAudioHardwarePropertyDefaultOutputDevice)
+    }
+
+    private static func defaultAudioDeviceID(selector: AudioObjectPropertySelector) -> AudioDeviceID? {
         var id = AudioDeviceID(kAudioObjectUnknown)
         var size = UInt32(MemoryLayout<AudioDeviceID>.size)
         var address = AudioObjectPropertyAddress(
-            mSelector: kAudioHardwarePropertyDefaultInputDevice,
+            mSelector: selector,
             mScope: kAudioObjectPropertyScopeGlobal,
             mElement: kAudioObjectPropertyElementMain
         )
@@ -508,8 +671,16 @@ final class AudioInput: @unchecked Sendable {
         return status == noErr && id != AudioDeviceID(kAudioObjectUnknown) ? id : nil
     }
 
-    private func isValidFormat(_ format: AVAudioFormat) -> Bool {
-        format.channelCount > 0 && format.sampleRate > 0
+    internal static func isDeviceRunningSomewhere(_ id: AudioDeviceID) -> Bool {
+        var running: UInt32 = 0
+        var size = UInt32(MemoryLayout<UInt32>.size)
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyDeviceIsRunningSomewhere,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        let status = AudioObjectGetPropertyData(id, &address, 0, nil, &size, &running)
+        return status == noErr && running != 0
     }
 
     private func copyBuffer(_ buffer: AVAudioPCMBuffer) -> AVAudioPCMBuffer? {
@@ -523,12 +694,12 @@ final class AudioInput: @unchecked Sendable {
     }
 }
 
-/// Route-change handling for AVAudioEngineConfigurationChange.
+/// Route-change handling for audio configuration changes.
 enum AudioRouteChangeLogic {
     enum Action: Equatable {
         /// Same microphone, still capturing — the graph settled on its own.
         case ignore
-        /// Same microphone, engine died — a plain restart keeps the existing tap.
+        /// Same microphone, session died — restart capture on the same device.
         case restartEngine
         /// Too soon after a start to tell churn from a real failure; retry shortly.
         case waitForGrace

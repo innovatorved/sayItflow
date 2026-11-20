@@ -274,4 +274,59 @@ final class AudioInputLifecycleTests: XCTestCase {
         try? await Task.sleep(for: .milliseconds(100))
         input.stop()
     }
+
+    /// Regression test for loudspeaker volume drop: input-only capture must never
+    /// open the default output speaker (or leave any hardware running after stop).
+    func testCaptureDoesNotOpenOutputDeviceAndReleasesInputOnStop() async throws {
+        let input = AudioInput()
+        let outID = AudioInput.defaultOutputDeviceID()
+        let outputWasAlreadyRunning = outID.map { AudioInput.isDeviceRunningSomewhere($0) } ?? false
+
+        final class CaptureStats: @unchecked Sendable {
+            private let lock = OSAllocatedUnfairLock(initialState: (buffers: 0, frames: 0, sampleRate: 0.0))
+            func record(frames: Int, sampleRate: Double) {
+                lock.withLock {
+                    $0.buffers += 1
+                    $0.frames += frames
+                    $0.sampleRate = sampleRate
+                }
+            }
+            var snapshot: (buffers: Int, frames: Int, sampleRate: Double) { lock.withLock { $0 } }
+        }
+        let stats = CaptureStats()
+        input.onBuffer = { buffer in
+            stats.record(frames: Int(buffer.frameLength), sampleRate: buffer.format.sampleRate)
+        }
+
+        do {
+            try await input.beginStreaming()
+        } catch {
+            input.stop()
+            throw XCTSkip("No usable input device in this environment")
+        }
+
+        try? await Task.sleep(for: .milliseconds(250))
+
+        if let outID, !outputWasAlreadyRunning {
+            XCTAssertFalse(
+                AudioInput.isDeviceRunningSomewhere(outID),
+                "AudioInput must not open the default output speaker while recording"
+            )
+        }
+
+        input.stop()
+        try? await Task.sleep(for: .milliseconds(150))
+
+        if let outID, !outputWasAlreadyRunning {
+            XCTAssertFalse(
+                AudioInput.isDeviceRunningSomewhere(outID),
+                "Default output speaker must remain idle after stop()"
+            )
+        }
+
+        let captured = stats.snapshot
+        XCTAssertGreaterThan(captured.buffers, 0, "Expected audio buffers to be delivered via onBuffer")
+        XCTAssertGreaterThan(captured.frames, 0, "Expected non-zero PCM frames")
+        XCTAssertGreaterThan(captured.sampleRate, 0, "Expected valid sample rate")
+    }
 }
