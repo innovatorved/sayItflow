@@ -1,23 +1,6 @@
 import AppKit
 import Foundation
 
-/// Apps where live AX/keystroke injection corrupts text (Monaco, Electron, terminals).
-/// These use the minimal waveform HUD and batch paste on release.
-enum LiveInjectionPolicy {
-    static func supportsLiveTyping(bundleID: String?) -> Bool {
-        guard let bundleID else { return true }
-        let blockedBundleIDs: Set<String> = [
-            "com.microsoft.VSCode",
-            "com.google.antigravity",
-            "com.exafunction.windsurf",
-            "com.todesktop.230313mzl4w4u92",
-            "com.apple.Terminal",
-            "com.googlecode.iterm2",
-        ]
-        return !blockedBundleIDs.contains(bundleID)
-    }
-}
-
 /// Determines the optimal injection strategy for target applications.
 /// Electron apps, web browsers, and terminals require Paste (⌘V) because AX selected-text
 /// either fails, silently no-ops, or corrupts DOM state.

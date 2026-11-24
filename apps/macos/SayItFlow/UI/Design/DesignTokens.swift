@@ -211,12 +211,6 @@ extension NSColor {
         let b = CGFloat(hex & 0xFF) / 255.0
         self.init(srgbRed: r, green: g, blue: b, alpha: alpha)
     }
-
-    var isDark: Bool {
-        guard let rgb = usingColorSpace(.deviceRGB) else { return true }
-        let luminance = 0.299 * rgb.redComponent + 0.587 * rgb.greenComponent + 0.114 * rgb.blueComponent
-        return luminance < 0.5
-    }
 }
 
 extension NSAppearance {
@@ -301,6 +295,7 @@ struct MonochromeCardModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(padding)
             .background(DesignTokens.surface, in: RoundedRectangle(cornerRadius: radius))
             .overlay(
@@ -336,22 +331,5 @@ extension View {
 
     func monochromeCanvas() -> some View {
         background(DesignTokens.canvas)
-    }
-
-    // Legacy helpers
-    func adminCanvasBackground() -> some View {
-        background(DesignTokens.canvas)
-    }
-
-    func adminCard() -> some View {
-        monochromeCard()
-    }
-
-    func adminElevatedCard() -> some View {
-        monochromeCard()
-    }
-
-    func nativeGroupedForm() -> some View {
-        formStyle(.grouped)
     }
 }

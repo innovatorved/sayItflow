@@ -41,52 +41,32 @@
 		A10000000000000000000035 /* SetupStep.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000035 /* SetupStep.swift */; };
 		A10000000000000000000037 /* PermissionStepView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000037 /* PermissionStepView.swift */; };
 		C10000000000000000000001 /* HoldSpaceKeyLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000001 /* HoldSpaceKeyLogic.swift */; };
-		C10000000000000000000002 /* DictationSessionGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000002 /* DictationSessionGate.swift */; };
 		C10000000000000000000003 /* PermissionsLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000003 /* PermissionsLogic.swift */; };
 		C10000000000000000000004 /* AXHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000004 /* AXHelpers.swift */; };
 		C10000000000000000000005 /* AppLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000005 /* AppLogger.swift */; };
 		C10000000000000000000006 /* SayItFlowError.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000006 /* SayItFlowError.swift */; };
-		C10000000000000000000007 /* ChunkBoundaryDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000007 /* ChunkBoundaryDetector.swift */; };
-		C10000000000000000000009 /* InjectionSessionGuardLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000009 /* InjectionSessionGuardLogic.swift */; };
 		C10000000000000000000010 /* SetupStepLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000010 /* SetupStepLogic.swift */; };
-		C10000000000000000000011 /* LivePartialMergeLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000011 /* LivePartialMergeLogic.swift */; };
 		C10000000000000000000012 /* LiveInjectionPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000012 /* LiveInjectionPolicy.swift */; };
-		D10000000000000000000001 /* StreamingTextInjector.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20000000000000000000001 /* StreamingTextInjector.swift */; };
-		D10000000000000000000003 /* LiveTextSink.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20000000000000000000003 /* LiveTextSink.swift */; };
 		E10000000000000000000001 /* KeystrokeEmitter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20000000000000000000001 /* KeystrokeEmitter.swift */; };
-		E10000000000000000000002 /* InjectionSessionGuard.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20000000000000000000002 /* InjectionSessionGuard.swift */; };
-		E10000000000000000000003 /* InjectedChunkTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20000000000000000000003 /* InjectedChunkTracker.swift */; };
 		F10000000000000000000001 /* InjectionFallback.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000001 /* InjectionFallback.swift */; };
 		F10000000000000000000002 /* PasteboardRescue.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000002 /* PasteboardRescue.swift */; };
-		G10000000000000000000001 /* BuildInfo.generated.swift in Sources */ = {isa = PBXBuildFile; fileRef = G20000000000000000000001 /* BuildInfo.generated.swift */; };
-		G10000000000000000000002 /* AudioTapHelper.m in Sources */ = {isa = PBXBuildFile; fileRef = G20000000000000000000002 /* AudioTapHelper.m */; };
 		G10000000000000000000003 /* SessionTrace.swift in Sources */ = {isa = PBXBuildFile; fileRef = G20000000000000000000005 /* SessionTrace.swift */; };
-		G10000000000000000000006 /* DictationAnalytics.swift in Sources */ = {isa = PBXBuildFile; fileRef = G20000000000000000000006 /* DictationAnalytics.swift */; };
 		H10000000000000000000001 /* AudioSampleCollector.swift in Sources */ = {isa = PBXBuildFile; fileRef = H20000000000000000000001 /* AudioSampleCollector.swift */; };
 		H10000000000000000000002 /* TranscriptHistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = H20000000000000000000002 /* TranscriptHistoryStore.swift */; };
 		H10000000000000000000003 /* TranscriptHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = H20000000000000000000003 /* TranscriptHistoryView.swift */; };
 		H10000000000000000000004 /* LocalLlamaRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = H20000000000000000000004 /* LocalLlamaRunner.swift */; };
-		G10000000000000000000007 /* DiagnosticReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = G20000000000000000000007 /* DiagnosticReport.swift */; };
 		T10000000000000000000001 /* HoldSpaceKeyLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T20000000000000000000001 /* HoldSpaceKeyLogicTests.swift */; };
 		T10000000000000000000003 /* PermissionsLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T20000000000000000000003 /* PermissionsLogicTests.swift */; };
-		T10000000000000000000004 /* DictationSessionGateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T20000000000000000000004 /* DictationSessionGateTests.swift */; };
 		T10000000000000000000005 /* SayItFlowErrorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T20000000000000000000005 /* SayItFlowErrorTests.swift */; };
 		T10000000000000000000006 /* HotkeyEngineStopTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T20000000000000000000006 /* HotkeyEngineStopTests.swift */; };
-		T10000000000000000000007 /* ChunkBoundaryDetectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T20000000000000000000007 /* ChunkBoundaryDetectorTests.swift */; };
-		T10000000000000000000008 /* InjectedChunkTrackerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T20000000000000000000008 /* InjectedChunkTrackerTests.swift */; };
-		T10000000000000000000011 /* InjectionSessionGuardLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T20000000000000000000011 /* InjectionSessionGuardLogicTests.swift */; };
 		T10000000000000000000013 /* SetupStepLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T20000000000000000000013 /* SetupStepLogicTests.swift */; };
 		T10000000000000000000014 /* AudioInputLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T20000000000000000000014 /* AudioInputLifecycleTests.swift */; };
 		T10000000000000000000017 /* PasteboardRescueTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T20000000000000000000017 /* PasteboardRescueTests.swift */; };
 		T10000000000000000000019 /* KeystrokeEmitterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T20000000000000000000019 /* KeystrokeEmitterTests.swift */; };
 		T10000000000000000000020 /* PermissionSettingsURLTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T20000000000000000000020 /* PermissionSettingsURLTests.swift */; };
-		T10000000000000000000021 /* LivePartialMergeLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T20000000000000000000021 /* LivePartialMergeLogicTests.swift */; };
 		T10000000000000000000022 /* PolishOutputGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T20000000000000000000022 /* PolishOutputGuardTests.swift */; };
 		T100000000000000000000099 /* S1MiniEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T200000000000000000000099 /* S1MiniEngineTests.swift */; };
 		T100000000000000000000100 /* TextInjectorPipelineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T200000000000000000000100 /* TextInjectorPipelineTests.swift */; };
-		T10000000000000000000023 /* ReconcileFinalTranscriptTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T20000000000000000000023 /* ReconcileFinalTranscriptTests.swift */; };
-		T10000000000000000000024 /* ClosureLiveTextSinkFinalizeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T20000000000000000000024 /* ClosureLiveTextSinkFinalizeTests.swift */; };
-		T10000000000000000000025 /* DictationAnalyticsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T20000000000000000000025 /* DictationAnalyticsTests.swift */; };
 		H10000000000000000000011 /* TranscriptHistoryStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = H20000000000000000000011 /* TranscriptHistoryStoreTests.swift */; };
 		H10000000000000000000012 /* AudioSampleCollectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = H20000000000000000000012 /* AudioSampleCollectorTests.swift */; };
 		H10000000000000000000013 /* VocabularyStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = H20000000000000000000013 /* VocabularyStoreTests.swift */; };
@@ -138,54 +118,32 @@
 		A20000000000000000000037 /* PermissionStepView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionStepView.swift; sourceTree = "<group>"; };
 		A30000000000000000000001 /* SayItFlow.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SayItFlow.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C20000000000000000000001 /* HoldSpaceKeyLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoldSpaceKeyLogic.swift; sourceTree = "<group>"; };
-		C20000000000000000000002 /* DictationSessionGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationSessionGate.swift; sourceTree = "<group>"; };
 		C20000000000000000000003 /* PermissionsLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionsLogic.swift; sourceTree = "<group>"; };
 		C20000000000000000000004 /* AXHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AXHelpers.swift; sourceTree = "<group>"; };
 		C20000000000000000000005 /* AppLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLogger.swift; sourceTree = "<group>"; };
 		C20000000000000000000006 /* SayItFlowError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SayItFlowError.swift; sourceTree = "<group>"; };
-		C20000000000000000000007 /* ChunkBoundaryDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChunkBoundaryDetector.swift; sourceTree = "<group>"; };
-		C20000000000000000000009 /* InjectionSessionGuardLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InjectionSessionGuardLogic.swift; sourceTree = "<group>"; };
 		C20000000000000000000010 /* SetupStepLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupStepLogic.swift; sourceTree = "<group>"; };
-		C20000000000000000000011 /* LivePartialMergeLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LivePartialMergeLogic.swift; sourceTree = "<group>"; };
 		C20000000000000000000012 /* LiveInjectionPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveInjectionPolicy.swift; sourceTree = "<group>"; };
-		D20000000000000000000001 /* StreamingTextInjector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingTextInjector.swift; sourceTree = "<group>"; };
-		D20000000000000000000003 /* LiveTextSink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveTextSink.swift; sourceTree = "<group>"; };
 		E20000000000000000000001 /* KeystrokeEmitter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeystrokeEmitter.swift; sourceTree = "<group>"; };
-		E20000000000000000000002 /* InjectionSessionGuard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InjectionSessionGuard.swift; sourceTree = "<group>"; };
-		E20000000000000000000003 /* InjectedChunkTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InjectedChunkTracker.swift; sourceTree = "<group>"; };
 		F20000000000000000000001 /* InjectionFallback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InjectionFallback.swift; sourceTree = "<group>"; };
 		F20000000000000000000002 /* PasteboardRescue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteboardRescue.swift; sourceTree = "<group>"; };
-		G20000000000000000000001 /* BuildInfo.generated.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildInfo.generated.swift; sourceTree = "<group>"; };
-		G20000000000000000000002 /* AudioTapHelper.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AudioTapHelper.m; sourceTree = "<group>"; };
-		G20000000000000000000003 /* AudioTapHelper.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AudioTapHelper.h; sourceTree = "<group>"; };
-		G20000000000000000000004 /* SayItFlow-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "SayItFlow-Bridging-Header.h"; sourceTree = "<group>"; };
 		G20000000000000000000005 /* SessionTrace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionTrace.swift; sourceTree = "<group>"; };
-		G20000000000000000000006 /* DictationAnalytics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationAnalytics.swift; sourceTree = "<group>"; };
 		H20000000000000000000001 /* AudioSampleCollector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioSampleCollector.swift; sourceTree = "<group>"; };
 		H20000000000000000000002 /* TranscriptHistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptHistoryStore.swift; sourceTree = "<group>"; };
 		H20000000000000000000003 /* TranscriptHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptHistoryView.swift; sourceTree = "<group>"; };
 		H20000000000000000000004 /* LocalLlamaRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalLlamaRunner.swift; sourceTree = "<group>"; };
-		G20000000000000000000007 /* DiagnosticReport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticReport.swift; sourceTree = "<group>"; };
 		T20000000000000000000001 /* HoldSpaceKeyLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoldSpaceKeyLogicTests.swift; sourceTree = "<group>"; };
 		T20000000000000000000003 /* PermissionsLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionsLogicTests.swift; sourceTree = "<group>"; };
-		T20000000000000000000004 /* DictationSessionGateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationSessionGateTests.swift; sourceTree = "<group>"; };
 		T20000000000000000000005 /* SayItFlowErrorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SayItFlowErrorTests.swift; sourceTree = "<group>"; };
 		T20000000000000000000006 /* HotkeyEngineStopTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyEngineStopTests.swift; sourceTree = "<group>"; };
-		T20000000000000000000007 /* ChunkBoundaryDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChunkBoundaryDetectorTests.swift; sourceTree = "<group>"; };
-		T20000000000000000000008 /* InjectedChunkTrackerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InjectedChunkTrackerTests.swift; sourceTree = "<group>"; };
-		T20000000000000000000011 /* InjectionSessionGuardLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InjectionSessionGuardLogicTests.swift; sourceTree = "<group>"; };
 		T20000000000000000000013 /* SetupStepLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupStepLogicTests.swift; sourceTree = "<group>"; };
 		T20000000000000000000014 /* AudioInputLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioInputLifecycleTests.swift; sourceTree = "<group>"; };
 		T20000000000000000000017 /* PasteboardRescueTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteboardRescueTests.swift; sourceTree = "<group>"; };
 		T20000000000000000000019 /* KeystrokeEmitterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeystrokeEmitterTests.swift; sourceTree = "<group>"; };
 		T20000000000000000000020 /* PermissionSettingsURLTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionSettingsURLTests.swift; sourceTree = "<group>"; };
-		T20000000000000000000021 /* LivePartialMergeLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LivePartialMergeLogicTests.swift; sourceTree = "<group>"; };
 		T20000000000000000000022 /* PolishOutputGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolishOutputGuardTests.swift; sourceTree = "<group>"; };
 		T200000000000000000000099 /* S1MiniEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = S1MiniEngineTests.swift; sourceTree = "<group>"; };
 		T200000000000000000000100 /* TextInjectorPipelineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextInjectorPipelineTests.swift; sourceTree = "<group>"; };
-		T20000000000000000000023 /* ReconcileFinalTranscriptTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReconcileFinalTranscriptTests.swift; sourceTree = "<group>"; };
-		T20000000000000000000024 /* ClosureLiveTextSinkFinalizeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClosureLiveTextSinkFinalizeTests.swift; sourceTree = "<group>"; };
-		T20000000000000000000025 /* DictationAnalyticsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationAnalyticsTests.swift; sourceTree = "<group>"; };
 		H20000000000000000000011 /* TranscriptHistoryStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptHistoryStoreTests.swift; sourceTree = "<group>"; };
 		H20000000000000000000012 /* AudioSampleCollectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioSampleCollectorTests.swift; sourceTree = "<group>"; };
 		H20000000000000000000013 /* VocabularyStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VocabularyStoreTests.swift; sourceTree = "<group>"; };
@@ -242,7 +200,6 @@
 				A20000000000000000000027 /* Assets.xcassets */,
 				A20000000000000000000028 /* SayItFlow.entitlements */,
 				A20000000000000000000029 /* Info.plist */,
-				G20000000000000000000004 /* SayItFlow-Bridging-Header.h */,
 			);
 			path = SayItFlow;
 			sourceTree = "<group>";
@@ -287,8 +244,6 @@
 			isa = PBXGroup;
 			children = (
 				A20000000000000000000007 /* AudioInput.swift */,
-				G20000000000000000000002 /* AudioTapHelper.m */,
-				G20000000000000000000003 /* AudioTapHelper.h */,
 			);
 			path = Audio;
 			sourceTree = "<group>";
@@ -311,11 +266,7 @@
 			isa = PBXGroup;
 			children = (
 				A20000000000000000000014 /* TextInjector.swift */,
-				D20000000000000000000001 /* StreamingTextInjector.swift */,
-				D20000000000000000000003 /* LiveTextSink.swift */,
 				E20000000000000000000001 /* KeystrokeEmitter.swift */,
-				E20000000000000000000002 /* InjectionSessionGuard.swift */,
-				E20000000000000000000003 /* InjectedChunkTracker.swift */,
 				F20000000000000000000001 /* InjectionFallback.swift */,
 				F20000000000000000000002 /* PasteboardRescue.swift */,
 			);
@@ -375,24 +326,17 @@
 				C20000000000000000000001 /* HoldSpaceKeyLogic.swift */,
 				V20000000000000000000002 /* VozEngine.swift */,
 				S20000000000000000000001 /* S1MiniEngine.swift */,
-				C20000000000000000000002 /* DictationSessionGate.swift */,
 				C20000000000000000000003 /* PermissionsLogic.swift */,
 				C20000000000000000000004 /* AXHelpers.swift */,
 				C20000000000000000000005 /* AppLogger.swift */,
 				C20000000000000000000006 /* SayItFlowError.swift */,
 				B20000000000000000000004 /* PolishOutputGuard.swift */,
-				C20000000000000000000007 /* ChunkBoundaryDetector.swift */,
-				C20000000000000000000009 /* InjectionSessionGuardLogic.swift */,
 				C20000000000000000000010 /* SetupStepLogic.swift */,
-				C20000000000000000000011 /* LivePartialMergeLogic.swift */,
 				C20000000000000000000012 /* LiveInjectionPolicy.swift */,
-				G20000000000000000000001 /* BuildInfo.generated.swift */,
 				G20000000000000000000005 /* SessionTrace.swift */,
-				G20000000000000000000006 /* DictationAnalytics.swift */,
 				H20000000000000000000001 /* AudioSampleCollector.swift */,
 				H20000000000000000000002 /* TranscriptHistoryStore.swift */,
 				H20000000000000000000004 /* LocalLlamaRunner.swift */,
-				G20000000000000000000007 /* DiagnosticReport.swift */,
 			);
 			path = Core;
 			sourceTree = "<group>";
@@ -402,23 +346,15 @@
 			children = (
 				T20000000000000000000001 /* HoldSpaceKeyLogicTests.swift */,
 				T20000000000000000000003 /* PermissionsLogicTests.swift */,
-				T20000000000000000000004 /* DictationSessionGateTests.swift */,
 				T20000000000000000000005 /* SayItFlowErrorTests.swift */,
 				T20000000000000000000006 /* HotkeyEngineStopTests.swift */,
-				T20000000000000000000007 /* ChunkBoundaryDetectorTests.swift */,
-				T20000000000000000000008 /* InjectedChunkTrackerTests.swift */,
-				T20000000000000000000011 /* InjectionSessionGuardLogicTests.swift */,
 				T20000000000000000000013 /* SetupStepLogicTests.swift */,
 				T20000000000000000000014 /* AudioInputLifecycleTests.swift */,
 				T20000000000000000000017 /* PasteboardRescueTests.swift */,
 				T20000000000000000000020 /* PermissionSettingsURLTests.swift */,
-				T20000000000000000000021 /* LivePartialMergeLogicTests.swift */,
 				T20000000000000000000022 /* PolishOutputGuardTests.swift */,
 				T200000000000000000000099 /* S1MiniEngineTests.swift */,
 				T200000000000000000000100 /* TextInjectorPipelineTests.swift */,
-				T20000000000000000000023 /* ReconcileFinalTranscriptTests.swift */,
-				T20000000000000000000024 /* ClosureLiveTextSinkFinalizeTests.swift */,
-				T20000000000000000000025 /* DictationAnalyticsTests.swift */,
 				H20000000000000000000011 /* TranscriptHistoryStoreTests.swift */,
 				H20000000000000000000012 /* AudioSampleCollectorTests.swift */,
 				H20000000000000000000013 /* VocabularyStoreTests.swift */,
@@ -559,32 +495,20 @@
 				A10000000000000000000025 /* AppContext.swift in Sources */,
 				A10000000000000000000026 /* LaunchAtLoginHelper.swift in Sources */,
 				C10000000000000000000001 /* HoldSpaceKeyLogic.swift in Sources */,
-				C10000000000000000000002 /* DictationSessionGate.swift in Sources */,
 				C10000000000000000000003 /* PermissionsLogic.swift in Sources */,
 				C10000000000000000000004 /* AXHelpers.swift in Sources */,
 				C10000000000000000000005 /* AppLogger.swift in Sources */,
 				C10000000000000000000006 /* SayItFlowError.swift in Sources */,
-				C10000000000000000000007 /* ChunkBoundaryDetector.swift in Sources */,
-				C10000000000000000000009 /* InjectionSessionGuardLogic.swift in Sources */,
 				C10000000000000000000010 /* SetupStepLogic.swift in Sources */,
-				C10000000000000000000011 /* LivePartialMergeLogic.swift in Sources */,
 				C10000000000000000000012 /* LiveInjectionPolicy.swift in Sources */,
-				D10000000000000000000001 /* StreamingTextInjector.swift in Sources */,
-				D10000000000000000000003 /* LiveTextSink.swift in Sources */,
 				E10000000000000000000001 /* KeystrokeEmitter.swift in Sources */,
-				E10000000000000000000002 /* InjectionSessionGuard.swift in Sources */,
-				E10000000000000000000003 /* InjectedChunkTracker.swift in Sources */,
 				F10000000000000000000001 /* InjectionFallback.swift in Sources */,
 				F10000000000000000000002 /* PasteboardRescue.swift in Sources */,
-				G10000000000000000000001 /* BuildInfo.generated.swift in Sources */,
-				G10000000000000000000002 /* AudioTapHelper.m in Sources */,
 				G10000000000000000000003 /* SessionTrace.swift in Sources */,
-				G10000000000000000000006 /* DictationAnalytics.swift in Sources */,
 				H10000000000000000000001 /* AudioSampleCollector.swift in Sources */,
 				H10000000000000000000002 /* TranscriptHistoryStore.swift in Sources */,
 				H10000000000000000000003 /* TranscriptHistoryView.swift in Sources */,
 				H10000000000000000000004 /* LocalLlamaRunner.swift in Sources */,
-				G10000000000000000000007 /* DiagnosticReport.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -594,24 +518,16 @@
 			files = (
 				T10000000000000000000001 /* HoldSpaceKeyLogicTests.swift in Sources */,
 				T10000000000000000000003 /* PermissionsLogicTests.swift in Sources */,
-				T10000000000000000000004 /* DictationSessionGateTests.swift in Sources */,
 				T10000000000000000000005 /* SayItFlowErrorTests.swift in Sources */,
 				T10000000000000000000006 /* HotkeyEngineStopTests.swift in Sources */,
-				T10000000000000000000007 /* ChunkBoundaryDetectorTests.swift in Sources */,
-				T10000000000000000000008 /* InjectedChunkTrackerTests.swift in Sources */,
-				T10000000000000000000011 /* InjectionSessionGuardLogicTests.swift in Sources */,
 				T10000000000000000000013 /* SetupStepLogicTests.swift in Sources */,
 				T10000000000000000000014 /* AudioInputLifecycleTests.swift in Sources */,
 				T10000000000000000000017 /* PasteboardRescueTests.swift in Sources */,
 				T10000000000000000000020 /* PermissionSettingsURLTests.swift in Sources */,
 				T10000000000000000000019 /* KeystrokeEmitterTests.swift in Sources */,
-				T10000000000000000000021 /* LivePartialMergeLogicTests.swift in Sources */,
 				T10000000000000000000022 /* PolishOutputGuardTests.swift in Sources */,
 				T100000000000000000000099 /* S1MiniEngineTests.swift in Sources */,
 				T100000000000000000000100 /* TextInjectorPipelineTests.swift in Sources */,
-				T10000000000000000000023 /* ReconcileFinalTranscriptTests.swift in Sources */,
-				T10000000000000000000024 /* ClosureLiveTextSinkFinalizeTests.swift in Sources */,
-				T10000000000000000000025 /* DictationAnalyticsTests.swift in Sources */,
 				H10000000000000000000011 /* TranscriptHistoryStoreTests.swift in Sources */,
 				H10000000000000000000012 /* AudioSampleCollectorTests.swift in Sources */,
 				H10000000000000000000013 /* VocabularyStoreTests.swift in Sources */,
@@ -676,7 +592,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 9;
+				CURRENT_PROJECT_VERSION = 10;
 				DEVELOPMENT_TEAM = X7B3MSL8U7;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_TESTABILITY = YES;
@@ -686,11 +602,10 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.7.1;
+				MARKETING_VERSION = 1.7.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.innovatorved.sayitflow;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OBJC_BRIDGING_HEADER = "SayItFlow/SayItFlow-Bridging-Header.h";
 				SWIFT_STRICT_CONCURRENCY = complete;
 			};
 			name = Debug;
@@ -703,7 +618,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 9;
+				CURRENT_PROJECT_VERSION = 10;
 				DEVELOPMENT_TEAM = X7B3MSL8U7;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -714,11 +629,10 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.7.1;
+				MARKETING_VERSION = 1.7.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.innovatorved.sayitflow;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OBJC_BRIDGING_HEADER = "SayItFlow/SayItFlow-Bridging-Header.h";
 				SWIFT_STRICT_CONCURRENCY = complete;
 			};
 			name = Release;
@@ -728,11 +642,11 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 9;
+				CURRENT_PROJECT_VERSION = 10;
 				DEVELOPMENT_TEAM = X7B3MSL8U7;
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.7.1;
+				MARKETING_VERSION = 1.7.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.innovatorved.sayitflow.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_STRICT_CONCURRENCY = complete;
@@ -746,11 +660,11 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 9;
+				CURRENT_PROJECT_VERSION = 10;
 				DEVELOPMENT_TEAM = X7B3MSL8U7;
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.7.1;
+				MARKETING_VERSION = 1.7.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.innovatorved.sayitflow.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_STRICT_CONCURRENCY = complete;

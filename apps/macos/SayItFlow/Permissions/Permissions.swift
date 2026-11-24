@@ -196,20 +196,6 @@ enum Permissions {
         return status(for: .inputMonitoring)
     }
 
-    @MainActor
-    static func nextUngrantedKind() -> PermissionKind? {
-        PermissionKind.allCases.first { status(for: $0) != .granted }
-    }
-
-    @MainActor
-    static func requestNextUngranted() async -> PermissionKind? {
-        guard let kind = PermissionKind.allCases.first(where: { status(for: $0) != .granted }) else {
-            return nil
-        }
-        _ = await request(kind)
-        return kind
-    }
-
     /// Validates Accessibility + Input Monitoring by creating a short-lived event tap.
     static func probeHotkeyTap() -> Bool {
         let mask = (1 << CGEventType.keyDown.rawValue)

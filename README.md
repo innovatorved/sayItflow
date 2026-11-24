@@ -75,7 +75,7 @@ make dmg
 
 | Action            | Shortcut                              |
 |-------------------|---------------------------------------|
-| Push-to-talk      | Hold **Spacebar** (>0.5s), speak, release |
+| Push-to-talk      | Hold **Spacebar** (>0.25s), speak, release |
 | Cancel            | **Escape**                            |
 | Normal space      | Quick tap on Spacebar                 |
 | Open dashboard    | Menu bar icon → Open Studio Dashboard |

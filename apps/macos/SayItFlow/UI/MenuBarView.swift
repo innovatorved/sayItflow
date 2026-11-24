@@ -5,7 +5,6 @@ struct MenuBarView: View {
     @EnvironmentObject private var appState: AppState
     @ObservedObject private var settings = AppSettings.shared
     @ObservedObject private var history = TranscriptHistoryStore.shared
-    @Environment(\.openSettings) private var openSettingsPanel
     @State private var hoveredRow: String?
 
     var body: some View {
@@ -18,8 +17,10 @@ struct MenuBarView: View {
                     permissionAlertRow
                     Divider().overlay(DesignTokens.borderSubtle).padding(.vertical, 2)
                 }
-                if let error = appState.lastError?.localizedDescription, !error.isEmpty {
-                    errorBanner(error)
+                if let error = appState.lastError,
+                   error != .permissionsIncomplete,
+                   !error.localizedDescription.isEmpty {
+                    errorBanner(error.localizedDescription)
                 }
 
                 MenuActionRow(
@@ -81,17 +82,20 @@ struct MenuBarView: View {
                     .foregroundStyle(DesignTokens.textPrimary)
 
                 HStack(spacing: 5) {
-                    StatusOrb(phase: appState.phase)
+                    StatusOrb(phase: appState.phase, needsAttention: appState.permissionsNeedAttention)
                     Text(appState.statusLabel.uppercased())
                         .font(DesignTokens.fontMono(size: 9, weight: .medium))
                         .tracking(DesignTokens.trackingLoose)
                         .foregroundStyle(statusCaptionColor)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
                 }
             }
 
             Spacer()
 
-            if settings.hotkeyMode != .custom
+            if !appState.permissionsNeedAttention,
+               settings.hotkeyMode != .custom
                 || KeyboardShortcuts.getShortcut(for: .pushToTalk) != nil {
                 HotkeyKeyCap(label: settings.hotkeyMode.label)
             }
@@ -103,10 +107,11 @@ struct MenuBarView: View {
     }
 
     private var statusCaptionColor: Color {
+        if appState.permissionsNeedAttention { return DesignTokens.warningFg }
         switch appState.phase {
-        case .recording: DesignTokens.successFg
-        case .error: DesignTokens.dangerFg
-        default: DesignTokens.textMuted
+        case .recording: return DesignTokens.successFg
+        case .error: return DesignTokens.dangerFg
+        default: return DesignTokens.textMuted
         }
     }
 
@@ -193,14 +198,16 @@ struct MenuBarView: View {
 
 private struct StatusOrb: View {
     let phase: DictationPhase
+    var needsAttention: Bool = false
     @State private var pulsing = false
 
     private var color: Color {
+        if needsAttention { return DesignTokens.warningFg }
         switch phase {
-        case .recording: DesignTokens.successFg
-        case .transcribing, .polishing, .injecting: DesignTokens.selection
-        case .error: DesignTokens.dangerFg
-        default: DesignTokens.textMuted
+        case .recording: return DesignTokens.successFg
+        case .transcribing, .polishing, .injecting: return DesignTokens.selection
+        case .error: return DesignTokens.dangerFg
+        default: return DesignTokens.textMuted
         }
     }
 

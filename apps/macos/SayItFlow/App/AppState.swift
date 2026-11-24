@@ -23,16 +23,9 @@ final class AppState: ObservableObject {
     @Published var wordCount: Int
     @Published var showOnboarding = false
     @Published var lastError: SayItFlowError?
-    @Published var engineReady = false
-    @Published var sttEngineName = "Voz (Neural Engine)"
-    @Published var vozModelReady = false
-    @Published var vozIsDownloading = false
-    @Published var vozDownloadProgress: Double = 0
-    @Published var modelSetupMessage = ""
-    @Published var modelSetupProgress: Double = 0
-    @Published var modelSetupModelName = "Voz Core ML (Neural Engine)"
-    @Published var modelSetupFailed = false
     @Published private(set) var permissionStatuses: [PermissionKind: PermissionStatus] = [:]
+
+    var engineReady: Bool { VozEngine.shared.isDownloaded }
 
     let settings = AppSettings.shared
     let engineSettings = EngineSettings.shared
@@ -73,7 +66,7 @@ final class AppState: ObservableObject {
             startPermissionMonitor()
         }
 
-        checkVozModelStatus()
+        VozEngine.shared.refreshStatus()
     }
 
     func startPermissionMonitor() {
@@ -97,52 +90,6 @@ final class AppState: ObservableObject {
         }
     }
 
-    func checkVozModelStatus() {
-        VozEngine.shared.refreshStatus()
-        vozModelReady = VozEngine.shared.isDownloaded
-        engineReady = vozModelReady
-        if vozModelReady {
-            modelSetupMessage = "Voz Model Ready on Neural Engine"
-            modelSetupProgress = 1.0
-        } else {
-            modelSetupMessage = "Voz model not downloaded (467 MB)"
-            modelSetupProgress = 0
-        }
-    }
-
-    func downloadVozModel() {
-        guard !vozIsDownloading else { return }
-        vozIsDownloading = true
-        modelSetupFailed = false
-        modelSetupMessage = "Downloading Voz Neural Engine Model (467 MB)…"
-        modelSetupProgress = 0.05
-
-        Task {
-            do {
-                try await VozEngine.shared.downloadModel()
-                self.vozIsDownloading = false
-                self.vozModelReady = true
-                self.engineReady = true
-                self.modelSetupMessage = "Voz Model Ready on Neural Engine"
-                self.modelSetupProgress = 1.0
-            } catch {
-                self.vozIsDownloading = false
-                self.modelSetupFailed = true
-                self.modelSetupMessage = "Download failed: \(error.localizedDescription)"
-            }
-        }
-    }
-
-    func startModelSetup() async {
-        downloadVozModel()
-    }
-
-    func retryModelSetup() {
-        downloadVozModel()
-    }
-
-    static var isLocalEngineAvailable: Bool { true }
-
     func enterSetupMode() {
         NSApp.setActivationPolicy(.regular)
     }
@@ -155,8 +102,6 @@ final class AppState: ObservableObject {
         UserDefaults.standard.set(true, forKey: "onboardingComplete")
         showOnboarding = false
         coordinator?.onboardingInjectionHandler = nil
-        coordinator?.onboardingLiveUpdateHandler = nil
-        coordinator?.onboardingLivePrefixProvider = nil
         if lastError == .permissionsIncomplete { lastError = nil }
         enterMenuBarMode()
         refreshPermissionsAndHotkey()
@@ -262,22 +207,8 @@ final class AppState: ObservableObject {
         coordinator?.onboardingInjectionHandler = handler
     }
 
-    func setOnboardingLiveHandlers(
-        prefix: @escaping () -> String,
-        update: @escaping (String) -> Void,
-        onComplete: ((String) -> Void)? = nil
-    ) {
-        coordinator?.onboardingLivePrefixProvider = prefix
-        coordinator?.onboardingLiveUpdateHandler = update
-        if let onComplete {
-            coordinator?.onboardingInjectionHandler = onComplete
-        }
-    }
-
     func clearOnboardingHandlers() {
         coordinator?.onboardingInjectionHandler = nil
-        coordinator?.onboardingLiveUpdateHandler = nil
-        coordinator?.onboardingLivePrefixProvider = nil
     }
 
     func cancelDictation() {
@@ -327,8 +258,7 @@ final class AppState: ObservableObject {
         let granted = permissionStatuses.isEmpty
             ? Permissions.allGranted()
             : PermissionsLogic.allGranted(statuses: permissionStatuses)
-        guard granted else { return false }
-        if hotkeyEngine?.hasLiveTap == true { return false }
-        return true
+        guard granted else { return true }
+        return hotkeyEngine?.hasLiveTap != true
     }
 }

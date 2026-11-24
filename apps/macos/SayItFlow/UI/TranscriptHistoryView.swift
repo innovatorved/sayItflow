@@ -298,7 +298,7 @@ struct TranscriptHistoryView: View {
             Text("No transcriptions yet")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(DesignTokens.textPrimary)
-            Text("Hold \(settings.hotkeyMode.label) anywhere, speak, and release. Every dictation is automatically saved here with its exact timestamp.")
+            Text("\(settings.hotkeyMode.holdInstruction) anywhere, speak, and release. Every dictation is automatically saved here with its exact timestamp.")
                 .font(.system(size: 12))
                 .foregroundStyle(DesignTokens.textSecondary)
                 .multilineTextAlignment(.center)

@@ -25,7 +25,6 @@ enum HUDState: Equatable {
 @MainActor
 final class RecordingHUDModel: ObservableObject {
     @Published var state: HUDState = .hidden
-    @Published var partialText: String = ""
     @Published var hotkeyLabel: String = "hotkey"
     @Published var displayMode: HUDDisplayMode = .full
     @Published var audioLevel: Float = 0
@@ -43,9 +42,6 @@ final class RecordingHUDController: NSObject {
     private var globalEscapeMonitor: Any?
     private var localEscapeMonitor: Any?
     private var lastAudioViewUpdate: CFAbsoluteTime = 0
-    /// Live-typing release — text is already in the field, so post-release states
-    /// (transcribing/polishing/done) must not resurrect the widget.
-    private var releaseDismissed = false
 
     private override init() {
         super.init()
@@ -57,10 +53,6 @@ final class RecordingHUDController: NSObject {
         displayMode: HUDDisplayMode = .full,
         targetAppIcon: NSImage? = nil
     ) {
-        if releaseDismissed {
-            guard state == .listening else { return }
-            releaseDismissed = false
-        }
         if let hotkeyLabel {
             model.hotkeyLabel = hotkeyLabel
         }
@@ -86,27 +78,6 @@ final class RecordingHUDController: NSObject {
         installEscapeMonitors()
     }
 
-    /// Hide at key release and ignore non-listening shows until the next session.
-    func dismissForRelease() {
-        releaseDismissed = true
-        model.state = .hidden
-        model.audioLevel = 0
-        model.partialText = ""
-        model.targetAppIcon = nil
-        placementScreen = nil
-        panel?.orderOut(nil)
-        removeEscapeMonitors()
-    }
-
-    func updatePartial(_ text: String, keepListeningLabel: Bool = false) {
-        model.partialText = text
-        if model.displayMode == .full,
-           !keepListeningLabel,
-           model.state == .listening || model.state == .transcribing {
-            model.state = .transcribing
-        }
-    }
-
     func updateAudioLevel(_ level: Float) {
         let clamped = min(max(level, 0), 1)
         // Low-pass exponential smoothing to prevent vibration from mic noise
@@ -118,10 +89,8 @@ final class RecordingHUDController: NSObject {
     }
 
     func hide() {
-        releaseDismissed = false
         model.state = .hidden
         model.audioLevel = 0
-        model.partialText = ""
         model.targetAppIcon = nil
         placementScreen = nil
         panel?.orderOut(nil)
@@ -220,7 +189,6 @@ struct RecordingHUDView: View {
     let onDismiss: () -> Void
 
     private var state: HUDState { model.state }
-    private var partialText: String { model.partialText }
     private var hotkeyLabel: String { model.hotkeyLabel }
     private var displayMode: HUDDisplayMode { model.displayMode }
     private var audioLevel: Float { model.audioLevel }
@@ -297,19 +265,11 @@ struct RecordingHUDView: View {
                     .font(.system(size: DesignTokens.baseFontSize, weight: .semibold))
                     .tracking(-0.03)
                     .foregroundStyle(DesignTokens.textPrimary)
-                if !partialText.isEmpty && (state == .transcribing || state == .listening) {
-                    Text(partialText)
-                        .font(.system(size: DesignTokens.baseFontSize))
-                        .tracking(-0.01)
-                        .foregroundStyle(DesignTokens.textPrimary)
-                        .lineLimit(2)
-                } else {
-                    Text(subtitle)
-                        .font(.system(size: 11))
-                        .tracking(-0.01)
-                        .foregroundStyle(subtitleColor)
-                        .lineLimit(2)
-                }
+                Text(subtitle)
+                    .font(.system(size: 11))
+                    .tracking(-0.01)
+                    .foregroundStyle(subtitleColor)
+                    .lineLimit(2)
             }
             Spacer(minLength: 0)
             if state != .hidden && state != .done {
@@ -394,7 +354,7 @@ struct RecordingHUDView: View {
         case .listening:
             "Hold \(hotkeyLabel) · Esc to cancel"
         case .transcribing:
-            if partialText.isEmpty { "Neural Engine transcribing…" } else { partialText }
+            "Neural Engine transcribing…"
         case .polishing: "Preparing text…"
         case .injecting: "Inserting at cursor…"
         case .done: "Inserted"

@@ -20,8 +20,6 @@ final class DictationCoordinator {
     private var pinnedBundleID: String?
 
     var onboardingInjectionHandler: ((String) -> Void)?
-    var onboardingLiveUpdateHandler: ((String) -> Void)?
-    var onboardingLivePrefixProvider: (() -> String)?
 
     var isSessionActive: Bool { activeSession || isProcessingRelease }
 
@@ -251,7 +249,6 @@ final class DictationCoordinator {
                     let engineName = S1MiniEngine.shared.isEnabled && isEnglish
                         ? S1MiniEngine.shared.selectedModel.engineAnalyticsTag
                         : "voz"
-                    let wordCount = transcript.split(whereSeparator: { $0.isWhitespace || $0.isNewline }).count
 
                     // Persist timestamped transcript to local history store
                     TranscriptHistoryStore.shared.record(
@@ -264,16 +261,6 @@ final class DictationCoordinator {
                         targetAppName: targetAppName,
                         targetBundleID: targetBundle,
                         injectionSucceeded: injectionSucceeded
-                    )
-
-                    DictationAnalytics.shared.record(
-                        startedAt: startedAt,
-                        words: wordCount,
-                        chars: transcript.count,
-                        chunksCommitted: 1,
-                        mode: "batch",
-                        engine: engineName,
-                        outcome: injectionSucceeded ? "done" : "error"
                     )
 
                     // Allow immediate re-press while the HUD pill fades out
@@ -306,15 +293,6 @@ final class DictationCoordinator {
                 }
             } catch {
                 AppLogger.dictation.error("Voz transcription error: \(error.localizedDescription)")
-                DictationAnalytics.shared.record(
-                    startedAt: startedAt,
-                    words: 0,
-                    chars: 0,
-                    chunksCommitted: 0,
-                    mode: "batch",
-                    engine: "voz",
-                    outcome: "error"
-                )
                 hudDwellNanoseconds = 2_200_000_000
                 self.isProcessingRelease = false
                 self.appState?.phase = .error(error.localizedDescription)
@@ -331,23 +309,10 @@ final class DictationCoordinator {
     }
 
     func cancel(reason: String) {
-        let startedAt = sessionStartedAt
         sessionGeneration &+= 1
         stopLevelMonitor()
         audioInput.stop()
         collector.clear()
-
-        if activeSession, let startedAt {
-            DictationAnalytics.shared.record(
-                startedAt: startedAt,
-                words: 0,
-                chars: 0,
-                chunksCommitted: 0,
-                mode: "batch",
-                engine: "voz",
-                outcome: "cancelled"
-            )
-        }
 
         activeSession = false
         isProcessingRelease = false

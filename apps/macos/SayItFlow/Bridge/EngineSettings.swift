@@ -19,5 +19,4 @@ final class EngineSettings: ObservableObject {
 
     var sttModelName: String { "Desert Ant Voz" }
     var sttModelArchitecture: String { "Parakeet TDT 0.6B v3 (Apple Neural Engine)" }
-    var sttModelSpeed: String { "290x real-time (10 min audio in ~2s)" }
 }

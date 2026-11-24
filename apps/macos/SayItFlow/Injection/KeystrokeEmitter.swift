@@ -33,10 +33,7 @@ enum KeystrokeEmitter {
 
     nonisolated static func isSimulated(_ event: NSEvent) -> Bool {
         event.cgEvent.map {
-            InjectionSessionGuardLogic.isSimulatedKeystroke(
-                userData: $0.getIntegerValueField(.eventSourceUserData),
-                tag: simulatedEventTag
-            )
+            $0.getIntegerValueField(.eventSourceUserData) == simulatedEventTag
         } ?? false
     }
 

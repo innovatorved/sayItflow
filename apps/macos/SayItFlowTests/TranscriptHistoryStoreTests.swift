@@ -5,20 +5,32 @@ import XCTest
 final class TranscriptHistoryStoreTests: XCTestCase {
     private var tempDir: URL!
     private var storageURL: URL!
+    private var activeStores: [TranscriptHistoryStore] = []
 
     override func setUp() {
         super.setUp()
         tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         storageURL = tempDir.appendingPathComponent("history.json")
+        activeStores = []
     }
 
     override func tearDown() {
+        for store in activeStores {
+            store.flushSync()
+        }
+        activeStores.removeAll()
         try? FileManager.default.removeItem(at: tempDir)
         super.tearDown()
     }
 
+    private func makeStore(maxEntries: Int = 500) -> TranscriptHistoryStore {
+        let store = TranscriptHistoryStore(storageURL: storageURL, maxEntries: maxEntries)
+        activeStores.append(store)
+        return store
+    }
+
     func testRecordPersistsWithTimestampAcrossReloads() {
-        let store = TranscriptHistoryStore(storageURL: storageURL, maxEntries: 50)
+        let store = makeStore(maxEntries: 50)
         let timestamp = Date(timeIntervalSince1970: 1_750_000_000)
 
         store.record(
@@ -34,7 +46,7 @@ final class TranscriptHistoryStoreTests: XCTestCase {
         )
         store.flushSync()
 
-        let reloaded = TranscriptHistoryStore(storageURL: storageURL, maxEntries: 50)
+        let reloaded = makeStore(maxEntries: 50)
         XCTAssertEqual(reloaded.entries.count, 1)
         let entry = reloaded.entries[0]
         XCTAssertEqual(entry.text, "Hello world.")
@@ -46,13 +58,13 @@ final class TranscriptHistoryStoreTests: XCTestCase {
     }
 
     func testIgnoresWhitespaceOnlyTranscripts() {
-        let store = TranscriptHistoryStore(storageURL: storageURL)
+        let store = makeStore()
         store.record(text: "   \n\t  ")
         XCTAssertTrue(store.entries.isEmpty)
     }
 
     func testEnforcesMaxEntriesAndNewestFirstOrder() {
-        let store = TranscriptHistoryStore(storageURL: storageURL, maxEntries: 3)
+        let store = makeStore(maxEntries: 3)
         store.record(text: "First")
         store.record(text: "Second")
         store.record(text: "Third")
@@ -62,7 +74,7 @@ final class TranscriptHistoryStoreTests: XCTestCase {
     }
 
     func testSearchMatchesTextRawTextAndAppName() {
-        let store = TranscriptHistoryStore(storageURL: storageURL)
+        let store = makeStore()
         store.record(text: "Ship release v2", rawText: "uh ship release v2", targetAppName: "Slack")
         store.record(text: "Fix compiler error", targetAppName: "Xcode")
 
@@ -73,7 +85,7 @@ final class TranscriptHistoryStoreTests: XCTestCase {
     }
 
     func testDeleteSingleAndDeleteAll() {
-        let store = TranscriptHistoryStore(storageURL: storageURL)
+        let store = makeStore()
         store.record(text: "One")
         store.record(text: "Two")
         let idToDelete = store.entries[0].id
@@ -86,7 +98,7 @@ final class TranscriptHistoryStoreTests: XCTestCase {
     }
 
     func testExportMarkdownIncludesTextAndAppName() {
-        let store = TranscriptHistoryStore(storageURL: storageURL)
+        let store = makeStore()
         store.record(text: "Deploy to production.", targetAppName: "Terminal")
 
         let md = store.exportMarkdown()

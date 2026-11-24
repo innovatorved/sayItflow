@@ -14,9 +14,8 @@ enum SessionTrace {
         return f
     }()
 
-    /// Persistent file handles to avoid open/close churn on every log entry.
+    /// Persistent file handle to avoid open/close churn on every log entry.
     nonisolated(unsafe) private static var traceHandle: FileHandle?
-    nonisolated(unsafe) private static var engineHandle: FileHandle?
 
     /// Maximum log file size before rotation (~1 MB).
     private static let maxLogFileSize: UInt64 = 1_048_576
@@ -28,10 +27,6 @@ enum SessionTrace {
 
     static var traceURL: URL {
         logsDirectory.appendingPathComponent("session.trace")
-    }
-
-    static var engineLogURL: URL {
-        logsDirectory.appendingPathComponent("engine.log")
     }
 
     static func log(_ message: String, category: String = "session") {
@@ -49,25 +44,6 @@ enum SessionTrace {
 
         appendToFile(url: traceURL, line: line, handle: &traceHandle)
         AppLogger.dictation.notice("\(message, privacy: .public)")
-    }
-
-    static func logEngine(_ text: String) {
-        guard !text.isEmpty else { return }
-        lock.lock()
-        defer { lock.unlock() }
-
-        let timestamp = formatter.string(from: Date())
-
-        let trimmed = text.trimmingCharacters(in: .newlines)
-        for subline in trimmed.components(separatedBy: .newlines) {
-            let line = "\(timestamp) [engine] \(subline)\n"
-            let entry = "\(timestamp) [engine] \(subline)"
-            inMemoryRecent.append(entry)
-            if inMemoryRecent.count > maxInMemory {
-                inMemoryRecent.removeFirst(inMemoryRecent.count - maxInMemory)
-            }
-            appendToFile(url: engineLogURL, line: line, handle: &engineHandle)
-        }
     }
 
     static func recentLogs(limit: Int = 100) -> [String] {

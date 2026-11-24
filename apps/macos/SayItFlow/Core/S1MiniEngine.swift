@@ -181,11 +181,7 @@ public final class S1MiniEngine: ObservableObject {
     @Published public var isEnabled: Bool {
         didSet {
             UserDefaults.standard.set(isEnabled, forKey: Keys.isEnabled)
-            if isEnabled {
-                Task { [weak self] in
-                    _ = await self?.ensureServerRunning()
-                }
-            } else {
+            if !isEnabled {
                 stopServer()
             }
         }

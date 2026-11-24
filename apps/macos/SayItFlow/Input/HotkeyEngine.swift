@@ -705,43 +705,6 @@ final class HotkeyEngine: @unchecked Sendable {
         return Unmanaged.passUnretained(event)
     }
 
-    private func handleCustomCombo(
-        type: CGEventType,
-        keyCode: Int64,
-        flags: CGEventFlags,
-        event: CGEvent
-    ) -> Unmanaged<CGEvent>? {
-        guard let shortcut = KeyboardShortcuts.getShortcut(for: .pushToTalk),
-              let key = shortcut.key else {
-            return Unmanaged.passUnretained(event)
-        }
-
-        let required = carbonFlags(from: shortcut.carbonModifiers)
-        let modifiersMatch = required.isSubset(of: flags) || flags.contains(required)
-        let keyMatch = Int64(key.rawValue) == keyCode
-
-        switch type {
-        case .keyDown where modifiersMatch && keyMatch:
-            let isRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
-            if isRepeat {
-                stateLock.lock()
-                let held = isKeyDown
-                stateLock.unlock()
-                return held ? nil : Unmanaged.passUnretained(event)
-            }
-            return consumeIf(beginPress(), event: event)
-        case .keyUp where keyMatch:
-            return consumeIf(endPress(), event: event)
-        case .flagsChanged where !required.isEmpty && !modifiersMatch:
-            // Releasing the modifier before the key would otherwise leave isKeyDown
-            // latched with no matching pressEnded, so dictation never stops.
-            endPress()
-            return Unmanaged.passUnretained(event)
-        default:
-            return Unmanaged.passUnretained(event)
-        }
-    }
-
     @discardableResult
     private func beginPress() -> Bool {
         stateLock.lock()
@@ -764,15 +727,6 @@ final class HotkeyEngine: @unchecked Sendable {
 
     private func consumeIf(_ consume: Bool, event: CGEvent) -> Unmanaged<CGEvent>? {
         consume ? nil : Unmanaged.passUnretained(event)
-    }
-
-    private func carbonFlags(from modifiers: Int) -> CGEventFlags {
-        var flags = CGEventFlags()
-        if modifiers & cmdKey != 0 { flags.insert(.maskCommand) }
-        if modifiers & optionKey != 0 { flags.insert(.maskAlternate) }
-        if modifiers & controlKey != 0 { flags.insert(.maskControl) }
-        if modifiers & shiftKey != 0 { flags.insert(.maskShift) }
-        return flags
     }
 
     private func nsFlags(from modifiers: Int) -> NSEvent.ModifierFlags {

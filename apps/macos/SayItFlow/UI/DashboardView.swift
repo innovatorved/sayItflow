@@ -16,7 +16,7 @@ enum MainWindowSection: String, CaseIterable, Identifiable, Hashable {
         case .status: "Status"
         case .history: "History"
         case .dictation: "Dictation"
-        case .text: "Audio & System"
+        case .text: "Text & System"
         case .permissions: "Permissions"
         case .about: "About"
         }
@@ -43,7 +43,6 @@ struct DashboardView: View {
 
     @State private var selection: MainWindowSection = .status
     @State private var demoText = ""
-    @State private var hint = ""
     @State private var fixingKind: PermissionKind?
 
     var initialSection: MainWindowSection?
@@ -268,7 +267,7 @@ struct DashboardView: View {
                     HotkeyKeyCap(label: settings.hotkeyMode.label, isEmphasized: true)
                 }
 
-                Text("Hold \(settings.hotkeyMode.label), speak naturally, and release to transcribe instantly.")
+                Text("\(settings.hotkeyMode.holdInstruction), speak naturally, and release to transcribe instantly.")
                     .font(.system(size: 11))
                     .foregroundStyle(DesignTokens.textSecondary)
 
@@ -582,7 +581,7 @@ struct DashboardView: View {
                             .foregroundStyle(DesignTokens.textSecondary)
                     }
                     Spacer()
-                    StatusBadge(kind: status.badgeKind, showDot: true)
+                    StatusBadge(kind: status.badgeKind, text: status.label, showDot: true)
                     if status != .granted {
                         Button(fixingKind == kind ? "…" : "Grant") {
                             Task { await fix(kind) }
@@ -663,18 +662,9 @@ struct DashboardView: View {
 
     private func configureTestInjection() {
         appState.refreshPermissionsAndHotkey(allowDuringOnboarding: true)
-        appState.setOnboardingLiveHandlers(
-            prefix: { demoText.trimmingCharacters(in: .whitespaces) },
-            update: { demoText = $0 },
-            onComplete: { text in
-                let trimmed = demoText.trimmingCharacters(in: .whitespaces)
-                if trimmed.isEmpty {
-                    demoText = text
-                } else {
-                    demoText = trimmed + " " + text
-                }
-                hint = "Inserted!"
-            }
-        )
+        appState.setOnboardingInjectionHandler { text in
+            let trimmed = demoText.trimmingCharacters(in: .whitespaces)
+            demoText = trimmed.isEmpty ? text : trimmed + " " + text
+        }
     }
 }

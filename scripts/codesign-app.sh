@@ -1,22 +1,11 @@
 #!/usr/bin/env bash
-# Sign SayItFlow.app and nested Python engine binaries for Gatekeeper/notarization.
+# Sign SayItFlow.app for Gatekeeper/notarization.
 set -euo pipefail
 
 APP="${1:?Usage: codesign-app.sh /path/to/SayItFlow.app}"
 IDENTITY="${SIGN_IDENTITY:?Set SIGN_IDENTITY to your Developer ID Application certificate name}"
 
 ENTITLEMENTS="${ENTITLEMENTS:-$(dirname "$0")/../apps/macos/SayItFlow/SayItFlow.entitlements}"
-
-echo "==> Signing nested engine binaries"
-ENGINE="$APP/Contents/Resources/engine"
-if [[ -d "$ENGINE" ]]; then
-  while IFS= read -r -d '' bin; do
-    codesign --force --options runtime --timestamp --sign "$IDENTITY" "$bin"
-  done < <(find "$ENGINE" -type f \( -perm -111 -o -name '*.so' -o -name '*.dylib' \) -print0 2>/dev/null || true)
-  if [[ -x "$ENGINE/.venv/bin/python" ]]; then
-    codesign --force --options runtime --timestamp --sign "$IDENTITY" "$ENGINE/.venv/bin/python"
-  fi
-fi
 
 echo "==> Signing app bundle"
 if [[ -f "$ENTITLEMENTS" ]]; then

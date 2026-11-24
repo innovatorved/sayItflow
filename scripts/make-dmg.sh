@@ -4,7 +4,6 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SCHEME=SayItFlow
 CONFIG=Release
-DERIVED="${HOME}/Library/Developer/Xcode/DerivedData"
 STAGING="$ROOT/build/dmg-staging"
 DMG="$ROOT/build/SayItFlow.dmg"
 

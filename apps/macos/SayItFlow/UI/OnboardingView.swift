@@ -44,11 +44,11 @@ struct OnboardingView: View {
                 // Right interactive step content
                 VStack(spacing: 0) {
                     ScrollView {
-                        VStack(alignment: .leading, spacing: 22) {
+                        VStack(alignment: .leading, spacing: 16) {
                             stepHeader
                             stepContent
                         }
-                        .padding(28)
+                        .padding(22)
                     }
                     
                     Spacer(minLength: 0)
@@ -61,7 +61,7 @@ struct OnboardingView: View {
         .frame(minWidth: 800, idealWidth: 860, maxWidth: .infinity, minHeight: 560, idealHeight: 600, maxHeight: .infinity)
         .background(DesignTokens.canvas)
         .task {
-            tryItHint = "Hold \(settings.hotkeyMode.label) for half a second, speak, then release."
+            tryItHint = "\(settings.hotkeyMode.holdInstruction) for 0.25s, speak, then release."
             launchAtLogin = settings.launchAtLogin
             updateHotkeyProbePassed()
             vozEngine.refreshStatus()
@@ -164,15 +164,20 @@ struct OnboardingView: View {
 
     private func stepRow(_ item: SetupStep) -> some View {
         let isCurrent = item == step
-        let isPast = item.rawValue < step.rawValue
+        let isCompleted: Bool = {
+            if let kind = item.permissionKind {
+                return Permissions.status(for: kind) == .granted
+            }
+            return item.rawValue < step.rawValue
+        }()
 
         return HStack(spacing: 8) {
             ZStack {
                 Circle()
-                    .stroke(isCurrent ? DesignTokens.textPrimary : (isPast ? DesignTokens.successFg : DesignTokens.borderSubtle), lineWidth: 1)
+                    .stroke(isCurrent ? DesignTokens.textPrimary : (isCompleted ? DesignTokens.successFg : DesignTokens.borderSubtle), lineWidth: 1)
                     .frame(width: 16, height: 16)
 
-                if isPast {
+                if isCompleted && !isCurrent {
                     Image(systemName: "checkmark")
                         .font(.system(size: 9, weight: .bold))
                         .foregroundStyle(DesignTokens.successFg)
@@ -186,7 +191,7 @@ struct OnboardingView: View {
             Text(item.title)
                 .font(.system(size: 12, weight: isCurrent ? .semibold : .regular))
                 .tracking(DesignTokens.trackingTight)
-                .foregroundStyle(isCurrent ? DesignTokens.textPrimary : (isPast ? DesignTokens.textSecondary : DesignTokens.textMuted))
+                .foregroundStyle(isCurrent ? DesignTokens.textPrimary : (isCompleted ? DesignTokens.textSecondary : DesignTokens.textMuted))
 
             Spacer()
         }
@@ -293,9 +298,9 @@ struct OnboardingView: View {
     }
 
     private var verifyStep: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 12) {
             // Permissions card
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 8) {
                 Text("PERMISSIONS STATUS")
                     .font(DesignTokens.fontMono(size: 10, weight: .medium))
                     .tracking(DesignTokens.trackingLoose)
@@ -305,10 +310,10 @@ struct OnboardingView: View {
                     verifyRow(title: kind.title, ok: Permissions.status(for: kind) == .granted)
                 }
             }
-            .monochromeCard(radius: DesignTokens.radiusLg, padding: 16)
+            .monochromeCard(radius: DesignTokens.radiusLg, padding: 12)
 
             // System & Voz Card
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 9) {
                 Text("SYSTEM & SPEECH ENGINE")
                     .font(DesignTokens.fontMono(size: 10, weight: .medium))
                     .tracking(DesignTokens.trackingLoose)
@@ -375,10 +380,10 @@ struct OnboardingView: View {
 
                 Divider().overlay(DesignTokens.borderSubtle)
 
-                // S1-mini Engine Status Row
+                // Normalizer Engine Status Row
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("S1-mini by Superwhisper (462 MB)")
+                        Text("\(s1Mini.selectedModel.shortName) by \(s1Mini.selectedModel.author) (\(s1Mini.selectedModel.sizeMB) MB)")
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(DesignTokens.textPrimary)
 
@@ -437,7 +442,7 @@ struct OnboardingView: View {
                     .buttonStyle(MonochromeOutlineButtonStyle(isCompact: true))
                 }
             }
-            .monochromeCard(radius: DesignTokens.radiusLg, padding: 16)
+            .monochromeCard(radius: DesignTokens.radiusLg, padding: 12)
         }
     }
 
@@ -455,7 +460,7 @@ struct OnboardingView: View {
                     HotkeyKeyCap(label: settings.hotkeyMode.label)
                 }
 
-                Text(tryItHint.isEmpty ? "Hold \(settings.hotkeyMode.label), speak, then release." : tryItHint)
+                Text(tryItHint.isEmpty ? "\(settings.hotkeyMode.holdInstruction), speak, then release." : tryItHint)
                     .font(DesignTokens.fontMono(size: 12))
                     .foregroundStyle(DesignTokens.textSecondary)
                     .padding(10)
@@ -493,7 +498,7 @@ struct OnboardingView: View {
                     }
                 }
             }
-            .monochromeCard(radius: DesignTokens.radiusLg, padding: 16)
+            .monochromeCard(radius: DesignTokens.radiusLg, padding: 12)
         }
     }
 
@@ -607,7 +612,6 @@ struct OnboardingView: View {
         case .tryDictation:
             isBusy = true
             if launchAtLogin {
-                LaunchAtLoginHelper.setEnabled(true)
                 AppSettings.shared.launchAtLogin = true
             }
             appState.clearOnboardingHandlers()
@@ -619,16 +623,14 @@ struct OnboardingView: View {
     }
 
     private func configureTryIt() {
-        appState.setOnboardingLiveHandlers(
-            prefix: { demoText },
-            update: { demoText = $0 },
-            onComplete: { text in
-                tryItHint = "Transcribed with Voz!"
-                if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    hasCompletedDemoDictation = true
-                }
+        appState.setOnboardingInjectionHandler { text in
+            let trimmed = demoText.trimmingCharacters(in: .whitespaces)
+            demoText = trimmed.isEmpty ? text : trimmed + " " + text
+            tryItHint = "Transcribed with Voz!"
+            if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                hasCompletedDemoDictation = true
             }
-        )
+        }
         appState.startHotkeyForOnboardingTry()
     }
 }

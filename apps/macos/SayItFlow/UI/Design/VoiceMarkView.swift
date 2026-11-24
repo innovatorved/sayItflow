@@ -90,37 +90,6 @@ struct BrandLockup: View {
     }
 }
 
-/// Brand voice waveform — drawn in SwiftUI for in-app surfaces.
-struct VoiceMarkShape: View {
-    var compact: Bool = false
-    var color: Color = DesignTokens.textPrimary
-
-    private var barWidths: [CGFloat] { compact ? [3, 3, 3, 3, 3] : [3, 3, 3, 3, 3] }
-    private var barHeights: [CGFloat] { compact ? [5, 8, 12, 8, 5] : [6, 10, 14, 10, 6] }
-    private var barSpacing: CGFloat { compact ? 1.5 : 2.0 }
-    private var cornerRadius: CGFloat { 1.5 }
-
-    var body: some View {
-        HStack(alignment: .center, spacing: barSpacing) {
-            ForEach(0 ..< barHeights.count, id: \.self) { index in
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .fill(color)
-                    .frame(width: barWidths[index], height: barHeights[index])
-            }
-        }
-    }
-}
-
-struct VoiceMarkView: View {
-    var size: CGFloat = 18
-    var tint: Color = DesignTokens.textPrimary
-
-    var body: some View {
-        VoiceMarkShape(compact: size <= 18, color: tint)
-            .frame(width: size, height: size)
-    }
-}
-
 /// AppKit template bitmap for MenuBarExtra
 enum MenuBarIconRenderer {
     private static let pointSize = NSSize(width: 18, height: 18)

@@ -161,6 +161,7 @@ actor LocalLlamaRunner {
         let limit = max(1, min(maxTokens, Int(contextSize) - tokens.count - 4))
         var hitLimit = true
 
+        let maxStopBytes = stopSequences.map(\.utf8.count).max() ?? 0
         for _ in 0..<limit {
             var nextToken = llama_sampler_sample(sampler, ctx, -1)
 
@@ -180,10 +181,12 @@ actor LocalLlamaRunner {
                 }
             }
 
-            if !stopSequences.isEmpty {
-                let currentText = String(decoding: outputBytes, as: UTF8.self)
-                if let matchedStop = stopSequences.first(where: { currentText.hasSuffix($0) }) {
-                    let trimmed = String(currentText.dropLast(matchedStop.count))
+            if maxStopBytes > 0 {
+                let tailCount = min(outputBytes.count, maxStopBytes + 4)
+                let tailText = String(decoding: outputBytes.suffix(tailCount), as: UTF8.self)
+                if let matchedStop = stopSequences.first(where: { tailText.hasSuffix($0) }) {
+                    let fullText = String(decoding: outputBytes, as: UTF8.self)
+                    let trimmed = String(fullText.dropLast(matchedStop.count))
                     return LocalLlamaCompletion(text: trimmed, hitTokenLimit: false)
                 }
             }

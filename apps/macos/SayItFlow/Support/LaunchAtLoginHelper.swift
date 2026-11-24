@@ -15,8 +15,4 @@ enum LaunchAtLoginHelper {
             }
         }
     }
-
-    static func unregisterIfPossible() {
-        setEnabled(false)
-    }
 }
